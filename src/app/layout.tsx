@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
+import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 
 export const metadata: Metadata = {
   title: "Balsathi AI",
   description: "Nurturing Every Child's Development Through AI",
+  manifest: "/manifest.webmanifest",
 };
 
 export default async function RootLayout({
@@ -17,6 +19,7 @@ export default async function RootLayout({
   return (
     <html lang={session?.preferredLanguage ?? "en"}>
       <body>
+        <ServiceWorkerRegistration />
         <AppShell session={session}>{children}</AppShell>
       </body>
     </html>

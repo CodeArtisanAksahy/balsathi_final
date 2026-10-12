@@ -2,6 +2,8 @@ import type { AppLocale } from "./domain";
 
 export type DataMode = "demo" | "postgres";
 
+const developmentAuthSecret = "balsathi-dev-only-secret-change-me";
+
 function env(name: string, fallback: string): string {
   const value = process.env[name];
   return value === undefined || value === "" ? fallback : value;
@@ -24,7 +26,7 @@ export const config = {
   dataMode: env("DATA_MODE", "demo") as DataMode,
   appOrigin: env("APP_ORIGIN", "http://localhost:3000"),
   databaseUrl: env("DATABASE_URL", ""),
-  authSecret: env("AUTH_SECRET", "balsathi-dev-only-secret-change-me"),
+  authSecret: env("AUTH_SECRET", developmentAuthSecret),
   sessionCookie: env("SESSION_COOKIE", "balsathi_session"),
   sessionTtlHours: envNumber("SESSION_TTL_HOURS", 12),
 
@@ -60,6 +62,12 @@ export const config = {
   defaultLocale: env("DEFAULT_LOCALE", "en") as AppLocale,
   isProduction: process.env.NODE_ENV === "production",
 };
+
+export function assertSecureAuthConfiguration(): void {
+  if (config.isProduction && config.authSecret === developmentAuthSecret) {
+    throw new Error("AUTH_SECRET must be configured in production.");
+  }
+}
 
 export function isPostgresMode(): boolean {
   return config.dataMode === "postgres";

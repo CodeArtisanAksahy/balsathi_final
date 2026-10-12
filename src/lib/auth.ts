@@ -2,13 +2,14 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { getDemoStore } from "./demo-store";
-import { config } from "./config";
+import { assertSecureAuthConfiguration, config } from "./config";
 import type { AppLocale, SessionUser, User } from "./domain";
 
 const encoder = new TextEncoder();
 const SESSION_COOKIE = config.sessionCookie;
 
 function secretKey(): Uint8Array {
+  assertSecureAuthConfiguration();
   return encoder.encode(config.authSecret);
 }
 

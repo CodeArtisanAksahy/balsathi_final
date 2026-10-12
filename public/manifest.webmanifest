@@ -1,0 +1,12 @@
+{
+  "name": "Balsathi AI",
+  "short_name": "Balsathi",
+  "description": "Child development monitoring for authorized Anganwadi teams and families.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f7f0",
+  "theme_color": "#1f5d42",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "any", "type": "image/x-icon" }
+  ]
+}

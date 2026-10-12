@@ -58,9 +58,23 @@ Install Node.js 20.19 or later, then run:
 
 Validate the application with `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. PostgreSQL schema validation requires `DATABASE_URL` to be set.
 
-### Proposed configuration
+### Docker demo deployment
 
-These names are design contracts, not existing configuration files:
+Set a strong `AUTH_SECRET` in your shell or an ignored `.env` file, then start the self-contained demo image:
+
+```sh
+docker compose up --build app
+```
+
+The liveness endpoint is available at `/api/health`. `docker compose --profile postgres up` starts a local PostgreSQL service for schema and migration development. The application deliberately remains in `DATA_MODE=demo`: the Prisma-backed repository is not implemented yet, so do not set `DATA_MODE=postgres` in deployment.
+
+### Offline installation
+
+The application now includes an installable web manifest and a privacy-preserving service worker. It caches only the public application shell and never caches API responses or child-record pages. Approved offline operations remain visible in the in-app sync queue; do not treat browser storage as a substitute for durable server synchronization.
+
+### Configuration
+
+Copy `.env.example` to an ignored `.env` file for local development. Supply production values through your deployment secret manager:
 
 | Variable | Planned behavior |
 | --- | --- |
