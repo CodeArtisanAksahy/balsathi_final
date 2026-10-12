@@ -1,0 +1,369 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AppRole {
+  WORKER
+  PARENT
+  CENTER_ADMIN
+  DISTRICT_ADMIN
+}
+
+enum Gender {
+  FEMALE
+  MALE
+  OTHER
+  UNSPECIFIED
+}
+
+enum GuardianRelationship {
+  MOTHER
+  FATHER
+  GRANDPARENT
+  SIBLING
+  OTHER
+}
+
+enum DevelopmentDomain {
+  PHYSICAL
+  COGNITIVE
+  LANGUAGE
+  SOCIAL
+  EMOTIONAL
+}
+
+enum ObservationMethod {
+  TEXT
+  VOICE
+  PHOTO
+}
+
+enum ObservationStatus {
+  DRAFT
+  REVIEW_PENDING
+  VERIFIED
+}
+
+enum AssessmentStatus {
+  MET
+  IN_PROGRESS
+  NEEDS_REVIEW
+  NOT_OBSERVED
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum MessageDirection {
+  WORKER_TO_PARENT
+  PARENT_TO_WORKER
+  SYSTEM
+}
+
+enum AttachmentKind {
+  IMAGE
+  AUDIO
+  DOCUMENT
+}
+
+enum AppLocale {
+  en
+  hi
+  mr
+}
+
+model Center {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  village   String
+  district  String
+  state     String
+  active    Boolean  @default(true)
+  children  Child[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  role              AppRole   @default(WORKER)
+  phone             String
+  preferredLanguage AppLocale @default(en)
+  centerIds         String[]
+  active            Boolean   @default(true)
+  passwordHash      String
+  guardians         Guardian[]
+  observations      Observation[]
+  assessments       MilestoneAssessment[]
+  recommendations   Recommendation[]
+  sentMessages      Message[] @relation("MessageSender")
+  receivedMessages  Message[] @relation("MessageRecipient")
+  chatLogs          ChatLog[]
+  auditLogs         AuditLog[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Guardian {
+  id                String    @id @default(cuid())
+  name              String
+  phone             String
+  preferredLanguage AppLocale @default(en)
+  address           String
+  linkedUserId      String?
+  linkedUser        User?     @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+  childLinks        ChildGuardian[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model ChildGuardian {
+  childId      String
+  guardianId   String
+  relationship GuardianRelationship
+  isPrimary    Boolean   @default(false)
+  child        Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  guardian     Guardian  @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  @@id([childId, guardianId])
+  @@index([guardianId])
+}
+
+model Child {
+  id                    String              @id @default(cuid())
+  internalId            String              @unique
+  fullName              String
+  dateOfBirth           DateTime            @db.Date
+  gender                Gender              @default(UNSPECIFIED)
+  centerId              String
+  assignedWorkerId      String
+  enrollmentDate        DateTime            @default(now())
+  profilePhotoPath      String?
+  primaryLanguage       AppLocale           @default(en)
+  consentStatus         String              @default("PENDING")
+  emergencyContactName  String
+  emergencyContactPhone String
+  siblingIds            String[]
+  active                Boolean             @default(true)
+  center                Center              @relation(fields: [centerId], references: [id], onDelete: Restrict)
+  guardianLinks         ChildGuardian[]
+  observations          Observation[]
+  assessments           MilestoneAssessment[]
+  risks                 RiskAssessment[]
+  recommendations       Recommendation[]
+  messages              Message[]
+  reports               ReportRecord[]
+  growthMeasurements    GrowthMeasurement[]
+  attachments           AttachmentRecord[]
+  chatLogs              ChatLog[]
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([centerId, active])
+}
+
+model GrowthMeasurement {
+  id                  String   @id @default(cuid())
+  childId             String
+  measuredAt          DateTime
+  heightCm            Float
+  weightKg            Float
+  headCircumferenceCm Float?
+  notes               String?
+  child               Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@index([childId, measuredAt])
+}
+
+model AttachmentRecord {
+  id              String   @id @default(cuid())
+  observationId   String?
+  childId         String
+  kind            AttachmentKind
+  fileName        String
+  storageKey      String
+  mimeType        String
+  sizeBytes       Int
+  uploadedById    String
+  consentVerified Boolean  @default(false)
+  child           Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([childId])
+}
+
+model Observation {
+  id                 String              @id @default(cuid())
+  childId            String
+  createdById        String
+  observedAt         DateTime
+  method             ObservationMethod
+  observationLanguage AppLocale         @default(en)
+  domain             DevelopmentDomain
+  activityContext    String
+  observationText    String              @db.Text
+  workerNotes        String              @db.Text
+  aiTranscript       String?             @db.Text
+  aiExtractedSummary String?             @db.Text
+  followUpRequired   Boolean             @default(false)
+  reviewStatus       ObservationStatus   @default(REVIEW_PENDING)
+  attachmentIds      String[]
+  child              Child               @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdBy          User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  assessments        MilestoneAssessment[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  @@index([childId, observedAt])
+  @@index([createdById])
+}
+
+model MilestoneDefinition {
+  id                String              @id @default(cuid())
+  slug              String              @unique
+  domain            DevelopmentDomain
+  titleEn           String
+  titleHi           String
+  titleMr           String
+  descriptionEn     String              @db.Text
+  descriptionHi     String              @db.Text
+  descriptionMr     String              @db.Text
+  minAgeMonths      Int
+  maxAgeMonths      Int
+  reviewAfterMonths Int
+  activitiesEn      String[]
+  activitiesHi      String[]
+  activitiesMr      String[]
+  active            Boolean             @default(true)
+  assessments       MilestoneAssessment[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  @@index([domain, minAgeMonths, maxAgeMonths])
+}
+
+model MilestoneAssessment {
+  id                 String            @id @default(cuid())
+  childId            String
+  milestoneId        String
+  observationId      String?
+  assessedById       String
+  assessedAt         DateTime
+  status             AssessmentStatus
+  notes              String            @db.Text
+  child              Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  milestone          MilestoneDefinition @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+  observation        Observation?      @relation(fields: [observationId], references: [id], onDelete: SetNull)
+  assessedBy         User              @relation(fields: [assessedById], references: [id], onDelete: Restrict)
+  risks              RiskAssessment[]    @relation("RiskSourceMilestone")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  @@index([childId, assessedAt])
+  @@index([milestoneId])
+  @@index([assessedById])
+}
+
+model RiskAssessment {
+  id                    String               @id @default(cuid())
+  childId               String
+  level                 RiskLevel
+  title                 String
+  explanation           String               @db.Text
+  sourceObservationId   String?
+  sourceMilestoneId     String?
+  reviewRequired        Boolean              @default(true)
+  child                 Child                @relation(fields: [childId], references: [id], onDelete: Cascade)
+  sourceMilestone       MilestoneAssessment? @relation("RiskSourceMilestone", fields: [sourceMilestoneId], references: [id], onDelete: SetNull)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  @@index([childId])
+}
+
+model Recommendation {
+  id                String    @id @default(cuid())
+  childId           String
+  createdById       String
+  locale            AppLocale @default(en)
+  title             String
+  description       String    @db.Text
+  approvedForParent Boolean   @default(false)
+  status            String    @default("PENDING")
+  child             Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdBy         User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  @@index([childId, status])
+}
+
+model Message {
+  id          String           @id @default(cuid())
+  childId     String
+  fromUserId  String
+  toUserId    String
+  direction   MessageDirection
+  locale      AppLocale        @default(en)
+  subject     String
+  body        String           @db.Text
+  readAt      DateTime?
+  child       Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  fromUser    User             @relation("MessageSender", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUser      User             @relation("MessageRecipient", fields: [toUserId], references: [id], onDelete: Restrict)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  @@index([childId, createdAt])
+}
+
+model ReportRecord {
+  id            String   @id @default(cuid())
+  childId       String?
+  centerId      String?
+  generatedById String
+  title         String
+  periodLabel   String
+  summary       String   @db.Text
+  child         Child?   @relation(fields: [childId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([childId])
+}
+
+model ChatLog {
+  id              String    @id @default(cuid())
+  userId          String
+  childId         String?
+  locale          AppLocale @default(en)
+  question        String    @db.Text
+  responseSummary String    @db.Text
+  sourceRefs      String[]
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child           Child?    @relation(fields: [childId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  scopeCenterId String?
+  metadata    Json?
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  center      Center?  @relation(fields: [scopeCenterId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  @@index([scopeCenterId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}

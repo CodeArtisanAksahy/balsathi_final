@@ -1,0 +1,16 @@
+# Dependencies and generated output
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Local configuration and uploads
+.env
+.env.local
+uploads/
+
+# OS and editor metadata
+.DS_Store
+.trae/
