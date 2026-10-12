@@ -23,9 +23,9 @@ test("demo data contains expected seeded records", () => {
   resetDemoStore();
   const data = createDemoData();
   assert.equal(data.centers.length, 2);
-  assert.equal(data.users.length, 4);
-  assert.equal(data.children.length, 4);
-  assert.equal(data.observations.length, 4);
+  assert.equal(data.users.length, 6);
+  assert.equal(data.children.length, 10);
+  assert.equal(data.observations.length, 22);
   assert.equal(data.milestoneDefinitions.length, 3);
 });
 
@@ -35,7 +35,7 @@ test("worker is linked to center-1 children", () => {
   assert.ok(worker);
   assert.deepEqual(worker.centerIds, ["center-1"]);
   const workerChildren = data.children.filter((c) => c.centerId === "center-1");
-  assert.equal(workerChildren.length, 3);
+  assert.equal(workerChildren.length, 6);
 });
 
 test("parent-1 is linked to child-1 and child-4 via guardian", () => {

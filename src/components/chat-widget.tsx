@@ -18,8 +18,8 @@ const suggestedQuestions = [
   { en: "Suggest home activities", hi: "घरेलू गतिविधियाँ सुझाएं", mr: "घरगुती उपक्रम सुचवा" },
 ];
 
-export function ChatWidget({ session }: { session: SessionUser }) {
-  const [open, setOpen] = useState(false);
+export function ChatWidget({ session, defaultOpen = false }: { session: SessionUser; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",

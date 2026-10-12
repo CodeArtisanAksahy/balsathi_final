@@ -538,5 +538,100 @@ const seed: DemoData = {
 export const demoUsers = seed.users.map(({ passwordHash: _passwordHash, ...user }) => user);
 
 export function createDemoData(): DemoData {
-  return structuredClone(seed);
+  const data = structuredClone(seed);
+  const extraChildren = [
+    ["Anaya Dhurve", "2022-02-11", "FEMALE", "center-1", "worker-1", "hi"],
+    ["Pooja Naik", "2021-07-22", "FEMALE", "center-1", "worker-1", "mr"],
+    ["Arjun Thakre", "2023-10-03", "MALE", "center-2", "worker-2", "mr"],
+    ["Meera Kumbhare", "2022-11-27", "FEMALE", "center-2", "worker-2", "en"],
+    ["Ishaan More", "2021-04-15", "MALE", "center-1", "worker-1", "hi"],
+    ["Kavya Jadhav", "2023-05-19", "FEMALE", "center-2", "worker-2", "mr"],
+  ] as const;
+  const parentUsers = [
+    { id: "parent-2", name: "Maya Dhurve", email: "parent2@balsathi.demo", phone: "+91 9876543211", locale: "hi" as const, centerId: "center-1" },
+    { id: "parent-3", name: "Ravi Thakre", email: "parent3@balsathi.demo", phone: "+91 9876543212", locale: "mr" as const, centerId: "center-2" },
+  ];
+
+  for (const parent of parentUsers) {
+    data.users.push({
+      id: parent.id, name: parent.name, email: parent.email, phone: parent.phone, role: "PARENT",
+      preferredLanguage: parent.locale, centerIds: [parent.centerId], active: true, passwordHash, createdAt: now, updatedAt: now,
+    });
+  }
+
+  extraChildren.forEach(([fullName, dateOfBirth, gender, centerId, assignedWorkerId, primaryLanguage], index) => {
+    const number = index + 5;
+    const childId = `child-${number}`;
+    const linkedParent = index === 0 ? "parent-2" : index === 2 ? "parent-3" : null;
+    const guardianId = `guardian-${number}`;
+    data.children.push({
+      id: childId,
+      internalId: `BAL-${String(number).padStart(4, "0")}`,
+      fullName,
+      dateOfBirth,
+      gender,
+      centerId,
+      assignedWorkerId,
+      enrollmentDate: "2025-01-10",
+      profilePhotoPath: null,
+      primaryLanguage,
+      consentStatus: "APPROVED",
+      emergencyContactName: `${fullName.split(" ")[0]} guardian`,
+      emergencyContactPhone: `+91 98765432${20 + number}`,
+      siblingIds: [],
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    data.guardians.push({
+      id: guardianId,
+      name: linkedParent ? parentUsers.find((parent) => parent.id === linkedParent)?.name ?? "Demo guardian" : `${fullName.split(" ")[0]} guardian`,
+      phone: `+91 98765432${20 + number}`,
+      preferredLanguage: primaryLanguage,
+      address: centerId === "center-1" ? "Indiranagar, Pune" : "Baner, Pune",
+      linkedUserId: linkedParent,
+      createdAt: now,
+      updatedAt: now,
+    });
+    data.childGuardians.push({ childId, guardianId, relationship: "MOTHER", isPrimary: true });
+
+    [0, 1, 2].forEach((observationIndex) => {
+      const domain = (["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"] as const)[(index + observationIndex) % 5];
+      const method = (["TEXT", "VOICE", "PHOTO"] as const)[(index + observationIndex) % 3];
+      const observedAt = `2026-10-${String(3 + index + observationIndex).padStart(2, "0")}T10:00:00.000Z`;
+      data.observations.push({
+        id: `observation-${number}-${observationIndex + 1}`,
+        childId,
+        createdById: assignedWorkerId,
+        observedAt,
+        method,
+        observationLanguage: primaryLanguage,
+        domain,
+        activityContext: observationIndex === 0 ? "Guided learning activity" : "Free play and peer interaction",
+        observationText: `${fullName} participated in a synthetic demo ${domain.toLowerCase()} activity with age-appropriate support.`,
+        workerNotes: observationIndex === 0 ? "Continue the activity during the next center visit." : "Share a simple home activity with the guardian.",
+        aiTranscript: method === "VOICE" ? "Synthetic demo transcript: participation was recorded for worker review." : null,
+        aiExtractedSummary: "Synthetic demonstration record; requires worker review where appropriate.",
+        followUpRequired: index === 1 && observationIndex === 1,
+        reviewStatus: observationIndex === 0 ? "VERIFIED" : "REVIEW_PENDING",
+        attachmentIds: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+    data.recommendations.push({
+      id: `recommendation-${number}`,
+      childId,
+      createdById: assignedWorkerId,
+      locale: primaryLanguage,
+      title: `Practice a daily ${index % 2 ? "turn-taking" : "picture-talk"} activity`,
+      description: "Synthetic, non-clinical activity guidance for the demo. Review it with the family before use.",
+      approvedForParent: true,
+      status: "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+
+  return data;
 }

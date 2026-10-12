@@ -39,6 +39,7 @@ const workerNav: NavItem[] = [
   { href: "/observations/photo", label: "Photo Observation", icon: Camera },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/messages", label: "Messages", icon: MessageSquare },
+  { href: "/assistant", label: "AI Assistant", icon: Sparkles },
   { href: "/offline", label: "Offline & Sync", icon: Cloud },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -52,6 +53,7 @@ const parentNav: NavItem[] = [
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/help", label: "Help & Support", icon: HelpCircle },
+  { href: "/assistant", label: "AI Assistant", icon: Sparkles },
 ];
 
 const adminNav: NavItem[] = [
@@ -62,6 +64,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/assistant", label: "AI Assistant", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
