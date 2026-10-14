@@ -116,7 +116,7 @@ export function getDomainProgress(state: DemoData, childId: string, domain: Deve
     state.milestoneDefinitions.filter((m) => m.domain === domain && m.active).map((m) => m.id),
   );
   const assessments = state.milestoneAssessments.filter(
-    (a) => a.childId === childId && domainMilestoneIds.has(a.milestoneId),
+    (a) => a.childId === childId && domainMilestoneIds.has(a.milestoneId) && !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(a.status),
   );
   if (assessments.length === 0) return null;
   const met = assessments.filter((a) => a.status === "MET").length;
@@ -141,7 +141,9 @@ export function getMilestoneStatistics(state: DemoData, childId: string) {
   const inProgress = assessments.filter((a) => a.status === "IN_PROGRESS").length;
   const needsReview = assessments.filter((a) => a.status === "NEEDS_REVIEW").length;
   const notObserved = assessments.filter((a) => a.status === "NOT_OBSERVED").length;
-  return { total, met, inProgress, needsReview, notObserved };
+  const notAssessed = assessments.filter((a) => a.status === "NOT_ASSESSED").length;
+  const notApplicable = assessments.filter((a) => a.status === "NOT_APPLICABLE").length;
+  return { total, met, inProgress, needsReview, notObserved, notAssessed, notApplicable };
 }
 
 /**

@@ -8,6 +8,8 @@ export type Permission =
   | "observations:read"
   | "observations:create"
   | "observations:update"
+  | "followups:read"
+  | "followups:update"
   | "milestones:read"
   | "milestones:create"
   | "messages:read"
@@ -35,6 +37,8 @@ const permissions: Record<AppRole, readonly Permission[]> = {
     "observations:read",
     "observations:create",
     "observations:update",
+    "followups:read",
+    "followups:update",
     "milestones:read",
     "milestones:create",
     "messages:read",
@@ -50,6 +54,8 @@ const permissions: Record<AppRole, readonly Permission[]> = {
     "observations:read",
     "observations:create",
     "observations:update",
+    "followups:read",
+    "followups:update",
     "milestones:read",
     "milestones:create",
     "messages:read",
@@ -65,6 +71,8 @@ const permissions: Record<AppRole, readonly Permission[]> = {
     "observations:read",
     "observations:create",
     "observations:update",
+    "followups:read",
+    "followups:update",
     "milestones:read",
     "milestones:create",
     "messages:read",
@@ -97,4 +105,22 @@ export function requireCenterAccess(session: SessionUser, centerId: string): voi
   if (!canAccessCenter(session, centerId)) {
     throw new ApiError(403, "CENTER_FORBIDDEN", "This center is outside your assigned scope.");
   }
+}
+
+/** Enforce child scope against database child records, including explicit parent links. */
+export async function requireDatabaseChildAccess(session: SessionUser, childId: string) {
+  const { prisma } = await import("./prisma");
+  const child = await prisma.child.findFirst({
+    where: {
+      id: childId,
+      active: true,
+      ...(session.role === "DISTRICT_ADMIN" ? {} : session.role === "PARENT"
+        ? { guardianLinks: { some: { guardian: { linkedUserId: session.id } } } }
+        : session.role === "WORKER"
+          ? { OR: [{ assignedWorkerId: session.id }, { centerId: { in: session.centerIds } }] }
+          : { centerId: { in: session.centerIds } }),
+    },
+  });
+  if (!child) throw new ApiError(404, "CHILD_NOT_FOUND", "Child record not found.");
+  return child;
 }

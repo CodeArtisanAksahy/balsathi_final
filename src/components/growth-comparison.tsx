@@ -8,6 +8,9 @@ import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildGrowth } from "@/lib/selectors";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 
 export function GrowthComparison({
   session,
@@ -20,6 +23,10 @@ export function GrowthComparison({
   const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
   const childId = selectedChildId ?? children[0]?.id ?? "";
   const [metric, setMetric] = useState<"height" | "weight">("weight");
+  const [measuredAt, setMeasuredAt] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [heightCm, setHeightCm] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function selectChild(id: string) {
     router.push(`/growth?childId=${id}`);
@@ -55,6 +62,19 @@ export function GrowthComparison({
     return g.weightKg / (heightM * heightM);
   }
 
+  async function saveMeasurement(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    const payload = { childId, measuredAt: new Date(`${measuredAt}T12:00:00`).toISOString(), heightCm: Number(heightCm), weightKg: Number(weightKg), headCircumferenceCm: null, notes: null };
+    try {
+      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/growth", { method: "POST", body: JSON.stringify(payload) });
+      else storeActions.addGrowthMeasurement(session, payload);
+      toast.success("Growth measurement saved.");
+      setMeasuredAt(""); setHeightCm(""); setWeightKg("");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save measurement."); }
+    finally { setSaving(false); }
+  }
+
   const data = growth.map((g) => ({
     date: formatDate(g.measuredAt, session.preferredLanguage),
     value: metric === "height" ? g.heightCm : g.weightKg,
@@ -68,6 +88,13 @@ export function GrowthComparison({
       <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
 
       <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
+
+      {session.role !== "PARENT" && <form onSubmit={saveMeasurement} className="card p-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <input className="input" type="date" value={measuredAt} onChange={(event) => setMeasuredAt(event.target.value)} required aria-label="Measurement date" />
+        <input className="input" type="number" min="1" max="180" step="0.1" placeholder="Weight (kg)" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} required />
+        <input className="input" type="number" min="30" max="220" step="0.1" placeholder="Height (cm)" value={heightCm} onChange={(event) => setHeightCm(event.target.value)} required />
+        <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save measurement"}</button>
+      </form>}
 
       {/* Current measurements */}
       {last && (

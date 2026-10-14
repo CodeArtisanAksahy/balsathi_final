@@ -54,6 +54,27 @@ enum AssessmentStatus {
   IN_PROGRESS
   NEEDS_REVIEW
   NOT_OBSERVED
+  NOT_ASSESSED
+  NOT_APPLICABLE
+}
+
+enum FollowUpStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum FollowUpPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum PredictionReviewStatus {
+  GENERATED
+  REVIEWED
+  DISMISSED
 }
 
 enum RiskLevel {
@@ -107,6 +128,9 @@ model User {
   guardians         Guardian[]
   observations      Observation[]
   assessments       MilestoneAssessment[]
+  developmentAssessments DevelopmentAssessment[]
+  assignedFollowUps  FollowUp[]
+  assignedChildren  Child[] @relation("AssignedWorker")
   recommendations   Recommendation[]
   sentMessages      Message[] @relation("MessageSender")
   receivedMessages  Message[] @relation("MessageRecipient")
@@ -157,6 +181,7 @@ model Child {
   siblingIds            String[]
   active                Boolean             @default(true)
   center                Center              @relation(fields: [centerId], references: [id], onDelete: Restrict)
+  assignedWorker        User                @relation("AssignedWorker", fields: [assignedWorkerId], references: [id], onDelete: Restrict)
   guardianLinks         ChildGuardian[]
   observations          Observation[]
   assessments           MilestoneAssessment[]
@@ -165,6 +190,9 @@ model Child {
   messages              Message[]
   reports               ReportRecord[]
   growthMeasurements    GrowthMeasurement[]
+  developmentAssessments DevelopmentAssessment[]
+  followUps             FollowUp[]
+  predictions           MLPrediction[]
   attachments           AttachmentRecord[]
   chatLogs              ChatLog[]
   createdAt             DateTime            @default(now())
@@ -181,10 +209,14 @@ model GrowthMeasurement {
   weightKg            Float
   headCircumferenceCm Float?
   notes               String?
+  measurementSource   String   @default("WORKER_ENTRY")
+  measuredById        String?
+  verificationStatus  String   @default("UNREVIEWED")
   child               Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   @@index([childId, measuredAt])
+  @@index([verificationStatus, measuredAt])
 }
 
 model AttachmentRecord {
@@ -215,6 +247,8 @@ model Observation {
   activityContext    String
   observationText    String              @db.Text
   workerNotes        String              @db.Text
+  originalText       String?             @db.Text
+  idempotencyKey     String?
   aiTranscript       String?             @db.Text
   aiExtractedSummary String?             @db.Text
   followUpRequired   Boolean             @default(false)
@@ -223,10 +257,13 @@ model Observation {
   child              Child               @relation(fields: [childId], references: [id], onDelete: Cascade)
   createdBy          User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
   assessments        MilestoneAssessment[]
+  developmentAssessments DevelopmentAssessment[]
+  followUp           FollowUp?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   @@index([childId, observedAt])
   @@index([createdById])
+  @@unique([createdById, idempotencyKey])
 }
 
 model MilestoneDefinition {
@@ -271,6 +308,76 @@ model MilestoneAssessment {
   @@index([childId, assessedAt])
   @@index([milestoneId])
   @@index([assessedById])
+  @@index([childId, milestoneId, assessedAt])
+}
+
+model DevelopmentAssessment {
+  id                    String            @id @default(cuid())
+  childId               String
+  domain                DevelopmentDomain
+  score                 Float
+  assessmentMethod      String
+  assessmentVersion     String
+  assessedById          String
+  assessedAt            DateTime
+  sourceObservationId   String?
+  notes                 String            @db.Text
+  child                 Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  assessedBy            User              @relation(fields: [assessedById], references: [id], onDelete: Restrict)
+  sourceObservation     Observation?      @relation(fields: [sourceObservationId], references: [id], onDelete: SetNull)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  @@index([childId, domain, assessedAt])
+  @@index([assessmentMethod, assessmentVersion])
+}
+
+model FollowUp {
+  id              String           @id @default(cuid())
+  childId         String
+  observationId   String?
+  assignedToId    String?
+  status          FollowUpStatus   @default(OPEN)
+  priority        FollowUpPriority @default(NORMAL)
+  dueDate         DateTime?
+  resolutionNotes String           @default("") @db.Text
+  child           Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  observation     Observation?     @relation(fields: [observationId], references: [id], onDelete: SetNull)
+  assignedTo      User?            @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  @@index([childId, status, dueDate])
+  @@index([assignedToId, status])
+  @@unique([observationId])
+}
+
+model MLPrediction {
+  id                   String                @id @default(cuid())
+  childId              String?
+  scopeCenterIds       String[]              @default([])
+  modelName            String
+  modelVersion         String
+  predictionType       String
+  predictionValue      Json
+  confidenceValue      Float?
+  inputDataCutoff      DateTime
+  generatedAt          DateTime              @default(now())
+  modelArtifactVersion String
+  explanation          Json
+  reviewStatus         PredictionReviewStatus @default(GENERATED)
+  child                Child?                @relation(fields: [childId], references: [id], onDelete: SetNull)
+  @@index([childId, predictionType, generatedAt])
+  @@index([modelName, modelVersion])
+}
+
+model IdempotencyRecord {
+  id          String   @id @default(cuid())
+  actorId     String
+  key         String
+  entityType  String
+  entityId    String
+  createdAt   DateTime @default(now())
+  @@unique([actorId, key])
+  @@index([entityType, entityId])
 }
 
 model RiskAssessment {

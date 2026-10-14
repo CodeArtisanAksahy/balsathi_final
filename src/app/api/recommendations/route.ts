@@ -3,6 +3,8 @@ import { getActorFromSession, requirePermission } from "@/lib/authorization";
 import { addRecommendation, getChildRecommendations } from "@/lib/data";
 import { z } from "zod";
 import { appLocales } from "@/lib/domain";
+import { config } from "@/lib/config";
+import { createDatabaseRecommendation, listDatabaseRecommendations } from "@/lib/postgres-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +23,7 @@ export async function GET(request: Request): Promise<Response> {
     requirePermission(session.role, "reports:read");
     const childId = new URL(request.url).searchParams.get("childId");
     if (!childId) return jsonResponse([]);
-    const recs = getChildRecommendations(session, childId);
+    const recs = config.dataMode === "postgres" ? await listDatabaseRecommendations(session, childId) : getChildRecommendations(session, childId);
     return jsonResponse(recs);
   } catch (error) {
     return errorResponse(error);
@@ -33,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "reports:create");
     const input = recommendationSchema.parse(await readJson(request));
-    const rec = addRecommendation(session, input);
+    const rec = config.dataMode === "postgres" ? await createDatabaseRecommendation(session, input) : addRecommendation(session, input);
     return jsonResponse(rec, 201);
   } catch (error) {
     return errorResponse(error);

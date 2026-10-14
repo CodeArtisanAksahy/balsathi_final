@@ -6,6 +6,7 @@ import { Save, Loader2 } from "lucide-react";
 import { appLocales, genders, guardianRelationships, type SessionUser, type AppLocale, type Child } from "@/lib/domain";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 
 export function AddChildForm({
   session,
@@ -41,7 +42,7 @@ export function AddChildForm({
     setLoading(true);
     setError("");
     try {
-      const child = storeActions.addChild(session, {
+      const input = {
         fullName: form.fullName,
         dateOfBirth: form.dateOfBirth,
         gender: form.gender as Child["gender"],
@@ -56,7 +57,10 @@ export function AddChildForm({
           preferredLanguage: form.guardian.preferredLanguage as AppLocale,
           relationship: form.guardian.relationship as "MOTHER" | "FATHER" | "GRANDPARENT" | "SIBLING" | "OTHER",
         },
-      });
+      };
+      const child = await getConfiguredDataMode() === "postgres"
+        ? await apiFetch<{ id: string; fullName: string }>("/api/children", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(input) })
+        : storeActions.addChild(session, input);
       toast.success(`Child "${child.fullName}" registered successfully.`);
       router.push(`/children/${child.id}`);
     } catch (err: any) {

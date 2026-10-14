@@ -9,6 +9,7 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildMessages } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 
 export function MessagesView({
   session,
@@ -38,16 +39,18 @@ export function MessagesView({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  function send() {
+  async function send() {
     if (!text.trim() || !childId) return;
     setSending(true);
     try {
-      storeActions.addMessage(session, {
+      const input = {
         childId,
         locale: session.preferredLanguage,
         subject: "Message",
         body: text,
-      });
+      };
+      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/messages", { method: "POST", body: JSON.stringify(input) });
+      else storeActions.addMessage(session, input);
       setText("");
     } catch {
       toast.error("Failed to send message.");

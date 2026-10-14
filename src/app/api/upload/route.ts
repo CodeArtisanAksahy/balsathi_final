@@ -3,6 +3,7 @@ import { ApiError, getActorFromSession, requireCenterAccess, requirePermission }
 import { appendAudit, getDemoStore, newId } from "@/lib/demo-store";
 import type { AttachmentKind, AttachmentRecord } from "@/lib/domain";
 import { uploadFile } from "@/lib/storage";
+import { config } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request): Promise<Response> {
   try {
     const session = await getActorFromSession();
+    if (config.dataMode === "postgres") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for PostgreSQL mode.");
     requirePermission(session.role, "observations:create");
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

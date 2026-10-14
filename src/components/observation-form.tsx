@@ -6,6 +6,7 @@ import { Save, Loader2, Mic, Camera, FileText } from "lucide-react";
 import type { SessionUser, ObservationMethod, DevelopmentDomain, AssessmentStatus } from "@/lib/domain";
 import { appLocales, developmentDomains, observationMethods, assessmentStatuses } from "@/lib/domain";
 import { cn } from "@/lib/utils";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
@@ -49,13 +50,16 @@ export function ObservationForm({
     setLoading(true);
     setError("");
     try {
-      const result = storeActions.addObservation(session, {
+      const payload = {
         ...form,
         observedAt: new Date(form.observedAt).toISOString(),
         attachmentIds: [],
-      });
+      };
+      const saved = await getConfiguredDataMode() === "postgres"
+        ? await apiFetch<{ id: string; childId: string }>("/api/observations", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) })
+        : storeActions.addObservation(session, payload).observation;
       toast.success("Observation saved successfully.");
-      router.push(`/children/${result.observation.childId}`);
+      router.push(`/children/${saved.childId}`);
     } catch (err: any) {
       setError(err.message ?? "Failed to save observation");
     } finally {

@@ -5,9 +5,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATA_MODE: demo
+      DATA_MODE: ${DATA_MODE:-demo}
       APP_ORIGIN: http://localhost:3000
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in your environment or .env file}
+      DATABASE_URL: ${DATABASE_URL:-}
+      ML_MODEL_PATH: ${ML_MODEL_PATH:-}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
       interval: 30s

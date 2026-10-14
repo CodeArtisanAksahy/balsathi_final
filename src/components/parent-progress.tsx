@@ -12,19 +12,25 @@ import type { SessionUser, Child, Observation, MilestoneAssessment, GrowthMeasur
 import { developmentDomains } from "@/lib/domain";
 import { domainLabel, getMessages } from "@/lib/i18n";
 import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getChildProfile as selectChildProfile, getAuthorizedChildren } from "@/lib/selectors";
 
 type Profile = Awaited<ReturnType<typeof import("@/lib/data").getChildProfile>>;
 
 export function ParentProgressView({
   session,
-  profile,
-  children,
+  profile: initialProfile,
+  children: _initialChildren,
 }: {
   session: SessionUser;
   profile: Profile;
   children: Array<{ id: string; fullName: string }>;
 }) {
+  const childId = initialProfile.child.id;
+  const profile = useStoreSelector((state) => selectChildProfile(state, childId));
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
   const t = getMessages(session.preferredLanguage);
+  if (!profile) return <div className="card p-8 text-center text-stone-500">Child record not found.</div>;
   const child = profile.child;
   const locale = session.preferredLanguage;
 
@@ -34,8 +40,8 @@ export function ParentProgressView({
       return def?.domain === domain;
     });
     const met = assessments.filter((a) => a.status === "MET").length;
-    const total = assessments.length || 1;
-    return { domain: domainLabel(domain, locale), value: Math.round((met / total) * 100), fullMark: 100 };
+    const total = assessments.filter((assessment) => !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(assessment.status)).length;
+    return { domain: domainLabel(domain, locale), value: total ? Math.round((met / total) * 100) : null, fullMark: 100 };
   });
 
   const completed = profile.milestoneAssessments.filter((a) => a.status === "MET").length;

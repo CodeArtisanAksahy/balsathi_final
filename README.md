@@ -32,9 +32,9 @@ The assistant is a **local template-based demo**, not an external LLM or unrestr
 
 ## Storage behavior and time-box boundary
 
-The required 30-minute walkthrough defaults to `DATA_MODE=demo` and runs without PostgreSQL or AI credentials. This is the intended demo-data fallback. Changes remain available only while the same server process and store remain alive; restarting, reloading the development server, or a cold start may reset both records and sessions. Visitors choosing the same demo identity share its synthetic records.
+The walkthrough defaults to `DATA_MODE=demo` and runs without PostgreSQL or AI credentials. Demo mutations are process-local on the server and browser-local for the reactive client demo; they are not a production persistence service.
 
-`DATA_MODE=postgres` is the persistence target. It requires a completed Prisma adapter, applied schema, database connection, and demo seed data. Provisioning and verifying that path may fall outside the 30-minute budget and must be reported as pending if unfinished. Explicit PostgreSQL mode must fail clearly rather than silently switch datasets when unavailable.
+`DATA_MODE=postgres` uses Prisma for supported API reads and writes and does not silently fall back when the database is unavailable. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for migration steps, endpoint coverage, and current limitations.
 
 The supported initial demo runs in one local Node.js process. A serverless/multi-instance deployment is not a reliable home for this memory-backed store or its sessions. PostgreSQL storage alone does not make the application production-ready.
 
@@ -47,6 +47,7 @@ The supported initial demo runs in one local Node.js process. A serverless/multi
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Proposed relational model, constraints, seed data, and repository parity. |
 | [SECURITY.md](SECURITY.md) | Demo limitations, proposed controls, verification checklist, and production gaps. |
 | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) | Planned request/response contracts, authorization, validation, and error behavior. |
+| [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) | Implemented Postgres routes, migrations, analytics definitions, forecasting, and remaining limits. |
 
 ## Local setup
 
@@ -66,7 +67,7 @@ Set a strong `AUTH_SECRET` in your shell or an ignored `.env` file, then start t
 docker compose up --build app
 ```
 
-The liveness endpoint is available at `/api/health`. `docker compose --profile postgres up` starts a local PostgreSQL service for schema and migration development. The application deliberately remains in `DATA_MODE=demo`: the Prisma-backed repository is not implemented yet, so do not set `DATA_MODE=postgres` in deployment.
+The liveness endpoint is available at `/api/health`. `docker compose --profile postgres up -d postgres` starts PostgreSQL for migration and local development. Configure `DATA_MODE=postgres` and a server-side `DATABASE_URL` before starting the app in database mode. Do not use demo credentials or weak secrets in production.
 
 ### Offline installation
 
@@ -78,17 +79,17 @@ Copy `.env.example` to an ignored `.env` file for local development. Supply prod
 
 | Variable | Planned behavior |
 | --- | --- |
-| `DATA_MODE` | `demo` by default; `postgres` explicitly requests the target database adapter. |
+| `DATA_MODE` | `demo` by default; `postgres` uses the Prisma-backed routes documented in the architecture status. |
 | `APP_ORIGIN` | Trusted browser origin; local default `http://localhost:3000`. |
 | `DATABASE_URL` | Server-only PostgreSQL connection string, required only in PostgreSQL mode. Supply through an ignored local environment file or secret store; no value is included here. |
 
 No external AI API key or session-signing secret is required for the proposed in-memory opaque-session demo. Session tokens are generated at runtime and must never be logged.
 
-## Deferred production work
+## Remaining production work
 
-Real authentication, durable sessions, multi-organization access, caregiver consent, secure hosting, auditable history, data retention/deletion, backups, clinically reviewed content, free-form AI integration, offline support, attachments, notifications, and formal language/accessibility review are outside this time box.
+Recommendation, messaging, uploads, and chatbot data still require PostgreSQL repository implementations. Provisioning, password reset, session revocation, retention/deletion, backups, clinically reviewed content, real-time multi-user transport, and a hardened deployment also remain necessary before production use.
 
-Child records are seeded and readable; creation, editing, and deletion are deferred. Observation creation and milestone updates are the deliberately small write workflow. The administrator view provides visibility rather than management tools.
+PostgreSQL mode does not automatically seed demo users or child records. Provision database accounts, centers, and milestone definitions before login. Unsupported subsystems are called out in the architecture status document.
 
 ## Verification status
 

@@ -5,6 +5,9 @@ out/
 build/
 dist/
 *.tsbuildinfo
+__pycache__/
+.pytest_cache/
+ml/artifacts/
 
 # Local configuration and uploads
 .env

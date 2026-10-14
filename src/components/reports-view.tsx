@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileText, Download, Loader2, Plus } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { formatDate } from "@/lib/utils";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
@@ -21,13 +22,15 @@ export function ReportsView({ session }: { session: SessionUser }) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   );
 
-  function generate() {
+  async function generate() {
     if (!childId) return;
     setGenerating(true);
     try {
-      storeActions.generateReport(session, childId);
+      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId }) });
+      else storeActions.generateReport(session, childId);
       toast.success("Report generated successfully.");
-    } finally {
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate report."); }
+    finally {
       setGenerating(false);
     }
   }

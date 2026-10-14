@@ -2,6 +2,9 @@ import { errorResponse, jsonResponse, readJson } from "@/lib/api";
 import { getSession, persistSession } from "@/lib/auth";
 import { getDemoStore } from "@/lib/demo-store";
 import { SignJWT } from "jose";
+import { config } from "@/lib/config";
+import { prisma } from "@/lib/prisma";
+import { appLocales } from "@/lib/domain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,10 +14,12 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getSession();
     if (!session) throw new Error("UNAUTHORIZED");
     const { locale } = (await readJson(request)) as { locale: string };
-    const data = getDemoStore();
-    const user = data.users.find((u) => u.id === session.id);
-    if (user) {
-      user.preferredLanguage = locale as "en" | "hi" | "mr";
+    if (!appLocales.includes(locale as (typeof appLocales)[number])) throw new Error("INVALID_LOCALE");
+    if (config.dataMode === "postgres") await prisma.user.update({ where: { id: session.id }, data: { preferredLanguage: locale as (typeof appLocales)[number] } });
+    else {
+      const data = getDemoStore();
+      const user = data.users.find((u) => u.id === session.id);
+      if (user) user.preferredLanguage = locale as (typeof appLocales)[number];
     }
     const encoder = new TextEncoder();
     const token = await new SignJWT({

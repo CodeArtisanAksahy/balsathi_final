@@ -19,6 +19,7 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getChildProfile as selectChildProfile, getAllDomainProgress } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 
 type Profile = Awaited<ReturnType<typeof import("@/lib/data").getChildProfile>>;
 
@@ -242,6 +243,8 @@ function StatusBadge({ status }: { status: string }) {
     IN_PROGRESS: "bg-blue-100 text-blue-600",
     NEEDS_REVIEW: "bg-amber-light text-amber-700",
     NOT_OBSERVED: "bg-stone-100 text-stone-500",
+    NOT_ASSESSED: "bg-stone-100 text-stone-500",
+    NOT_APPLICABLE: "bg-stone-100 text-stone-500",
   };
   return <span className={cn("badge", map[status] ?? "bg-stone-100 text-stone-500")}>{status}</span>;
 }
@@ -283,13 +286,15 @@ function ReportsTab({ session, profile }: { session: SessionUser; profile: NonNu
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
 
-  function generate() {
+  async function generate() {
     setGenerating(true);
     try {
-      storeActions.generateReport(session, profile.child.id);
+      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId: profile.child.id }) });
+      else storeActions.generateReport(session, profile.child.id);
       toast.success("Report generated successfully.");
       // Reports are reactive via the store; no need to manually update state
-    } finally {
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate report."); }
+    finally {
       setGenerating(false);
     }
   }

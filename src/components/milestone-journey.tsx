@@ -11,6 +11,7 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildMilestoneAssessments } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 
 export function MilestoneJourney({
   session,
@@ -47,7 +48,9 @@ export function MilestoneJourney({
     setSavingId(milestoneId);
     try {
       const existing = latestAssessmentFor(milestoneId);
-      if (existing) {
+      if (await getConfiguredDataMode() === "postgres") {
+        await apiFetch("/api/milestones", { method: "POST", body: JSON.stringify({ childId, milestoneId, status, notes: existing?.notes ?? "" }) });
+      } else if (existing) {
         storeActions.updateMilestoneAssessment(session, existing.id, { status });
       } else {
         storeActions.addMilestoneAssessment(session, {

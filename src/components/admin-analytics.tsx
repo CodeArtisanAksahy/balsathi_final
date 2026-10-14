@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { Activity, Baby, AlertTriangle, TrendingUp } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
+import { useMemo, useState } from "react";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAnalyticsData, getAuthorizedChildren } from "@/lib/selectors";
 
@@ -23,21 +24,44 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     state.riskAssessments.filter((r) => childIds.has(r.childId)),
   );
 
-  const totalObservations = observations.length;
-  const atRisk = risks.filter((r) => r.level === "HIGH").length;
-  const thisWeek = observations.filter((o) => {
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const filteredObservations = useMemo(() => observations.filter((observation) => {
+    const day = observation.observedAt.slice(0, 10);
+    return (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
+  }), [observations, fromDate, toDate]);
+  const filteredRisks = useMemo(() => risks.filter((risk) => {
+    const day = risk.createdAt.slice(0, 10);
+    return (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
+  }), [risks, fromDate, toDate]);
+
+  const totalObservations = filteredObservations.length;
+  const atRisk = filteredRisks.filter((r) => r.level === "HIGH").length;
+  const thisWeek = filteredObservations.filter((o) => {
     const t = new Date(o.observedAt).getTime();
     return t >= WEEK_AGO_CUTOFF;
   }).length;
 
-  const domainData = analytics.domainData.map((d) => ({
-    domain: d.domain.charAt(0) + d.domain.slice(1).toLowerCase(),
-    value: d.value,
+  const domainData = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"].map((domain) => ({
+    domain: domain.charAt(0) + domain.slice(1).toLowerCase(),
+    value: filteredObservations.filter((observation) => observation.domain === domain).length,
   }));
+  const trendData = [...filteredObservations.reduce((groups, observation) => {
+    const month = observation.observedAt.slice(0, 7);
+    groups.set(month, (groups.get(month) ?? 0) + 1);
+    return groups;
+  }, new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)).map(([month, count]) => ({ month, observations: count }));
+  const filteredRiskData = analytics.riskData.map((item) => ({ ...item, value: item.name === "No Risk" ? Math.max(0, children.length - filteredRisks.filter((risk) => risk.reviewRequired).length) : item.name === "At Risk" ? filteredRisks.filter((risk) => risk.level === "HIGH" && risk.reviewRequired).length : filteredRisks.filter((risk) => risk.level === "MODERATE" && risk.reviewRequired).length }));
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">System Analytics</h1>
+
+      <div className="card p-4 flex flex-wrap items-end gap-3">
+        <label className="text-xs text-stone-500">From<input type="date" className="input mt-1" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
+        <label className="text-xs text-stone-500">To<input type="date" className="input mt-1" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
+        {(fromDate || toDate) && <button className="btn-secondary" onClick={() => { setFromDate(""); setToDate(""); }}>Clear dates</button>}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -50,7 +74,9 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Observations by Domain</h3>
+          <h3 className="font-semibold text-stone-800 mb-1">Observations by Domain</h3>
+          <p className="text-xs text-stone-400 mb-4">Source: recorded observation records • Values update when records change.</p>
+          {totalObservations === 0 ? <div className="h-64 flex items-center justify-center text-stone-400">No observation data available.</div> :
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={domainData}>
@@ -62,29 +88,35 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          }
         </div>
 
         <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Risk Distribution</h3>
+          <h3 className="font-semibold text-stone-800 mb-1">Risk Distribution</h3>
+          <p className="text-xs text-stone-400 mb-4">Source: follow-up risk records • Values update when records change.</p>
+          {filteredRisks.length === 0 ? <div className="h-64 flex items-center justify-center text-stone-400">No risk assessment data available for this period.</div> :
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={analytics.riskData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                  {analytics.riskData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                <Pie data={filteredRiskData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {filteredRiskData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
                 <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #e7e5e4", fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          }
         </div>
       </div>
 
       <div className="card p-5">
-        <h3 className="font-semibold text-stone-800 mb-4">Observation Volume (Monthly)</h3>
+        <h3 className="font-semibold text-stone-800 mb-1">Observation Volume (Monthly)</h3>
+        <p className="text-xs text-stone-400 mb-4">Source: observation records • Values update when records change.</p>
+        {totalObservations === 0 ? <div className="h-64 flex items-center justify-center text-stone-400">No observations recorded for this period.</div> :
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={analytics.trendData}>
+              <BarChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#78716c" }} />
               <YAxis tick={{ fontSize: 11, fill: "#78716c" }} />
@@ -93,6 +125,7 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        }
       </div>
     </div>
   );
