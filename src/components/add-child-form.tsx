@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Loader2 } from "lucide-react";
-import { apiFetch } from "@/lib/fetch";
-import { appLocales, genders, guardianRelationships } from "@/lib/domain";
+import { appLocales, genders, guardianRelationships, type SessionUser, type AppLocale, type Child } from "@/lib/domain";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
 
 export function AddChildForm({
+  session,
   centers,
   workers,
 }: {
+  session: SessionUser;
   centers: Array<{ id: string; name: string }>;
   workers: Array<{ id: string; name: string }>;
 }) {
@@ -38,12 +41,24 @@ export function AddChildForm({
     setLoading(true);
     setError("");
     try {
-      const child = await apiFetch<{ child?: { id: string } }>("/api/children", {
-        method: "POST",
-        body: JSON.stringify(form),
+      const child = storeActions.addChild(session, {
+        fullName: form.fullName,
+        dateOfBirth: form.dateOfBirth,
+        gender: form.gender as Child["gender"],
+        centerId: form.centerId,
+        assignedWorkerId: form.assignedWorkerId,
+        primaryLanguage: form.primaryLanguage as AppLocale,
+        emergencyContactName: form.emergencyContactName,
+        emergencyContactPhone: form.emergencyContactPhone,
+        guardian: {
+          name: form.guardian.name,
+          phone: form.guardian.phone,
+          preferredLanguage: form.guardian.preferredLanguage as AppLocale,
+          relationship: form.guardian.relationship as "MOTHER" | "FATHER" | "GRANDPARENT" | "SIBLING" | "OTHER",
+        },
       });
-      router.push(`/children/${(child as any).child?.id ?? (child as any).id}`);
-      router.refresh();
+      toast.success(`Child "${child.fullName}" registered successfully.`);
+      router.push(`/children/${child.id}`);
     } catch (err: any) {
       setError(err.message ?? "Failed to create child record");
     } finally {

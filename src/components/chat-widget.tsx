@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { MessageCircle, Send, X, Sparkles, Loader2 } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { cn } from "@/lib/utils";
+import { processChat } from "@/lib/chat-service";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -46,22 +47,15 @@ export function ChatWidget({ session, defaultOpen = false }: { session: SessionU
     setInput("");
     setLoading(true);
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, locale, childId: childId || undefined }),
-      });
-      const data = await res.json();
-      if (data.data) {
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: data.data.answer, sources: data.data.sources },
-        ]);
-      } else {
-        setMessages((m) => [...m, { role: "assistant", content: "Sorry, I couldn't process that request." }]);
-      }
+      // Read directly from the reactive client store so answers always reflect
+      // the latest records without a server round-trip.
+      const result = processChat(session, locale, question, childId || undefined);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: result.answer, sources: result.sources },
+      ]);
     } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "Network error. Please try again." }]);
+      setMessages((m) => [...m, { role: "assistant", content: "Sorry, I couldn't process that request." }]);
     } finally {
       setLoading(false);
     }

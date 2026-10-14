@@ -23,6 +23,13 @@ import {
   Building2,
   ShieldCheck,
   BarChart3,
+  Brain,
+  Database,
+  Bell,
+  Globe,
+  HeartPulse,
+  Server,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/lib/domain";
@@ -37,6 +44,8 @@ const workerNav: NavItem[] = [
   { href: "/observations/new", label: "New Observation", icon: ClipboardList },
   { href: "/observations/voice", label: "Voice Observation", icon: Mic },
   { href: "/observations/photo", label: "Photo Observation", icon: Camera },
+  { href: "/milestones", label: "Milestones", icon: Activity },
+  { href: "/worker/ai-insights", label: "AI Insights", icon: Brain },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles },
@@ -52,20 +61,28 @@ const parentNav: NavItem[] = [
   { href: "/growth", label: "Growth", icon: TrendingUp },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/parent/health", label: "Health & Nutrition", icon: HeartPulse },
   { href: "/help", label: "Help & Support", icon: HelpCircle },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles },
+  { href: "/parent/settings", label: "Settings", icon: Settings },
 ];
 
 const adminNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/centers", label: "Centers", icon: Building2 },
-  { href: "/children", label: "Children", icon: Baby },
+  { href: "/admin/children", label: "Children", icon: Baby },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/ai-rules", label: "AI Rules", icon: Brain },
+  { href: "/admin/content", label: "Content", icon: BookOpen },
+  { href: "/admin/data-quality", label: "Data Quality", icon: Database },
+  { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
+  { href: "/admin/system-health", label: "System Health", icon: Server },
+  { href: "/admin/privacy", label: "Privacy", icon: Lock },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar({

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Filter, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, Baby } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { SessionUser } from "@/lib/domain";
 import { getMessages } from "@/lib/i18n";
 import { ageLabel, formatDate, cn } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getChildrenDirectory } from "@/lib/selectors";
 
 type ChildItem = {
   id: string;
@@ -21,12 +23,12 @@ type ChildItem = {
 
 export function ChildrenDirectory({
   session,
-  result,
+  result: _initialResult,
   centers,
   filters,
 }: {
   session: SessionUser;
-  result: { items: ChildItem[]; total: number; page: number; pageSize: number; pageCount: number };
+  result?: { items: ChildItem[]; total: number; page: number; pageSize: number; pageCount: number };
   centers: Array<{ id: string; name: string }>;
   filters: Record<string, any>;
 }) {
@@ -34,6 +36,24 @@ export function ChildrenDirectory({
   const t = getMessages(session.preferredLanguage);
   const [q, setQ] = useState(filters.q ?? "");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Keep local search input in sync with the URL filter (e.g., after navigation).
+  useEffect(() => {
+    setQ(filters.q ?? "");
+  }, [filters.q]);
+
+  // Read live data from the reactive store
+  const result = useStoreSelector((state) =>
+    getChildrenDirectory(state, session, {
+      q: filters.q,
+      centerId: filters.centerId,
+      status: filters.status ?? "all",
+      ageGroup: filters.ageGroup ?? "all",
+      sort: filters.sort ?? "name",
+      page: filters.page ?? 1,
+      pageSize: filters.pageSize ?? 6,
+    }),
+  );
 
   function applyFilters(newFilters: Record<string, string | number>) {
     const params = new URLSearchParams();

@@ -7,5 +7,5 @@ export default async function AddChildPage() {
   if (!session) return null;
   const centers = getCenters(session);
   const workers = getWorkers(session);
-  return <AddChildForm centers={centers} workers={workers} />;
+  return <AddChildForm session={session} centers={centers} workers={workers} />;
 }

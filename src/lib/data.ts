@@ -252,7 +252,7 @@ export function getDashboardData(session: SessionUser) {
       const observed = new Date(observation.observedAt).getTime();
       return observed >= Date.now() - 1000 * 60 * 60 * 24 * 7;
     }).length,
-    pendingSyncCount: 3,
+    pendingSyncCount: observations.filter((o) => o.reviewStatus === "DRAFT").length,
     domainOverview,
     recentObservations,
     upcomingMilestoneReviews,
@@ -467,12 +467,24 @@ export function getAnalyticsSeries(session: SessionUser) {
   const children = getAuthorizedChildren(session);
   const data = getDemoStore();
   const childIds = new Set(children.map((child) => child.id));
-  return [
-    { month: "Jul", observations: 3, followUps: 1 },
-    { month: "Aug", observations: 4, followUps: 1 },
-    { month: "Sep", observations: 5, followUps: 2 },
-    { month: "Oct", observations: data.observations.filter((record) => childIds.has(record.childId)).length, followUps: data.riskAssessments.filter((risk) => childIds.has(risk.childId)).length },
-  ];
+  const observations = data.observations.filter((record) => childIds.has(record.childId));
+
+  // Build a monthly series for the last 6 months from actual records.
+  const now = new Date();
+  const months: Array<{ month: string; observations: number; followUps: number }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthLabel = date.toLocaleDateString("en", { month: "short" });
+    const monthStart = date.getTime();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1).getTime();
+    const monthObs = observations.filter((o) => {
+      const t = new Date(o.observedAt).getTime();
+      return t >= monthStart && t < monthEnd;
+    });
+    const followUps = monthObs.filter((o) => o.followUpRequired).length;
+    months.push({ month: monthLabel, observations: monthObs.length, followUps });
+  }
+  return months;
 }
 
 export function getGrowthSeries(session: SessionUser, childId: string): GrowthMeasurement[] {

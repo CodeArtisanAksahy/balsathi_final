@@ -21,6 +21,8 @@ import { domainLabel, getMessages } from "@/lib/i18n";
 import { formatDateTime, ageLabel } from "@/lib/utils";
 import { DomainTree } from "./domain-tree";
 import { AreaChartCard } from "./area-chart-card";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getDashboardData, getChildRisks } from "@/lib/selectors";
 
 type DashboardData = Awaited<ReturnType<typeof import("@/lib/data").getDashboardData>>;
 
@@ -31,10 +33,18 @@ const statCards = [
   { key: "pendingSyncCount", label: "Offline Status", sub: "Pending sync", icon: Cloud, color: "bg-blue-100 text-blue-600", trend: "Synced 2 days ago" },
 ];
 
-export function DashboardContent({ session, data }: { session: SessionUser; data: DashboardData }) {
+export function DashboardContent({ session, data: _initialData }: { session: SessionUser; data?: DashboardData }) {
   const t = getMessages(session.preferredLanguage);
   const isParent = session.role === "PARENT";
   const isAdmin = session.role === "CENTER_ADMIN" || session.role === "DISTRICT_ADMIN";
+
+  // Read live data from the reactive store
+  const data = useStoreSelector((state) => getDashboardData(state, session));
+  // Also get child names for attention list
+  const attentionChildren = useStoreSelector((state) => {
+    const children = getDashboardData(state, session).attentionChildren;
+    return children.slice(0, 3);
+  });
 
   const quickActions = isParent
     ? [
@@ -212,7 +222,7 @@ export function DashboardContent({ session, data }: { session: SessionUser; data
       )}
 
       {/* Analytics chart for admin/worker */}
-      {!isParent && <AreaChartCard locale={session.preferredLanguage} />}
+      {!isParent && <AreaChartCard session={session} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { getAuthorizedChildren, getGrowthSeries } from "@/lib/data";
+import { getAuthorizedChildren } from "@/lib/data";
 import { GrowthComparison } from "@/components/growth-comparison";
 
 export default async function GrowthPage({
@@ -12,7 +12,5 @@ export default async function GrowthPage({
   const params = await searchParams;
   const children = getAuthorizedChildren(session);
   const childId = params.childId ?? children[0]?.id ?? "";
-  const growth = childId ? getGrowthSeries(session, childId) : [];
-  const selectedChild = children.find((c) => c.id === childId) ?? null;
-  return <GrowthComparison session={session} children={children} selectedChild={selectedChild} growth={growth} />;
+  return <GrowthComparison session={session} selectedChildId={childId} />;
 }

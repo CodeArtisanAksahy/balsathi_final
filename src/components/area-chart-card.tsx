@@ -1,27 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { AppLocale } from "@/lib/domain";
-import { apiFetch } from "@/lib/fetch";
+import type { SessionUser } from "@/lib/domain";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getObservationTrends } from "@/lib/selectors";
 
-export function AreaChartCard({ locale }: { locale: AppLocale }) {
-  const [data, setData] = useState<Array<{ month: string; observations: number; followUps: number }>>([]);
-  const [loading, setLoading] = useState(true);
+export function AreaChartCard({ session }: { session: SessionUser }) {
+  const data = useStoreSelector((state) => getObservationTrends(state, session, 6));
 
-  useEffect(() => {
-    apiFetch<Array<{ month: string; observations: number; followUps: number }>>("/api/analytics")
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, []);
-
+  const locale = session.preferredLanguage;
   const labels = locale === "hi" ? { observations: "अवलोकन", followUps: "फॉलो-अप" } : locale === "mr" ? { observations: "निरीक्षणे", followUps: "फॉलो-अप" } : { observations: "Observations", followUps: "Follow-ups" };
 
   return (
     <div className="card p-5">
       <h3 className="font-semibold text-stone-800 mb-4">Observation Trends</h3>
-      {loading ? (
-        <div className="h-64 flex items-center justify-center text-stone-400">Loading…</div>
+      {data.length === 0 || data.every((d) => d.observations === 0) ? (
+        <div className="h-64 flex items-center justify-center text-stone-400">
+          No observations recorded yet.
+        </div>
       ) : (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">

@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { getAuthorizedChildren, getChildMilestoneAssessments, getMilestoneDefinitions } from "@/lib/data";
+import { getAuthorizedChildren } from "@/lib/data";
 import { MilestoneJourney } from "@/components/milestone-journey";
 
 export default async function MilestonesPage({
@@ -12,8 +12,5 @@ export default async function MilestonesPage({
   const params = await searchParams;
   const children = getAuthorizedChildren(session);
   const childId = params.childId ?? children[0]?.id ?? "";
-  const milestones = getMilestoneDefinitions();
-  const assessments = childId ? getChildMilestoneAssessments(session, childId) : [];
-  const selectedChild = children.find((c) => c.id === childId) ?? null;
-  return <MilestoneJourney session={session} children={children} selectedChild={selectedChild} milestones={milestones} assessments={assessments} />;
+  return <MilestoneJourney session={session} selectedChildId={childId} />;
 }

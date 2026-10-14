@@ -14,30 +14,37 @@ import {
 import type { SessionUser } from "@/lib/domain";
 import { domainLabel, getMessages } from "@/lib/i18n";
 import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";
-import { apiFetch } from "@/lib/fetch";
 import { developmentDomains } from "@/lib/domain";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getChildProfile as selectChildProfile, getAllDomainProgress } from "@/lib/selectors";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
 
 type Profile = Awaited<ReturnType<typeof import("@/lib/data").getChildProfile>>;
 
 const tabs = ["Overview", "Observations", "Milestones", "Growth", "Reports"] as const;
 
-export function ChildProfileView({ session, profile }: { session: SessionUser; profile: Profile }) {
+export function ChildProfileView({ session, profile: _initialProfile }: { session: SessionUser; profile: Profile }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
-  const child = profile.child;
+  const childId = _initialProfile.child.id;
   const t = getMessages(session.preferredLanguage);
+
+  // Read live profile from the reactive store
+  const profile = useStoreSelector((state) => selectChildProfile(state, childId));
+
+  // Radar chart data from milestone assessments per domain (derived from store)
+  const radarData = useStoreSelector((state) => {
+    return developmentDomains.map((domain) => {
+      const score = getAllDomainProgress(state, childId).find((d) => d.domain === domain)?.score ?? 0;
+      return { domain: domainLabel(domain, session.preferredLanguage), value: score, fullMark: 100 };
+    });
+  });
+
+  if (!profile) return <p className="text-stone-500">Child not found.</p>;
+
+  const child = profile.child;
   const risks = profile.risks;
   const hasRisk = risks.some((r) => r.reviewRequired);
-
-  // Radar chart data from milestone assessments per domain
-  const radarData = developmentDomains.map((domain) => {
-    const assessments = profile.milestoneAssessments.filter((a) => {
-      const def = profile.milestoneDefinitions.find((m) => m.id === a.milestoneId);
-      return def?.domain === domain;
-    });
-    const met = assessments.filter((a) => a.status === "MET").length;
-    const total = assessments.length || 1;
-    return { domain: domainLabel(domain, session.preferredLanguage), value: Math.round((met / total) * 100), fullMark: 100 };
-  });
 
   return (
     <div className="space-y-5">
@@ -272,23 +279,22 @@ function GrowthTab({ session, profile }: { session: SessionUser; profile: Profil
   );
 }
 
-function ReportsTab({ session, profile }: { session: SessionUser; profile: Profile }) {
+function ReportsTab({ session, profile }: { session: SessionUser; profile: NonNullable<ReturnType<typeof import("@/lib/selectors").getChildProfile>> }) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
-  const [reports, setReports] = useState(profile.reports);
 
-  async function generate() {
+  function generate() {
     setGenerating(true);
     try {
-      const report = await apiFetch<any>("/api/reports", {
-        method: "POST",
-        body: JSON.stringify({ childId: profile.child.id }),
-      });
-      setReports((r) => [...r, report]);
+      storeActions.generateReport(session, profile.child.id);
+      toast.success("Report generated successfully.");
+      // Reports are reactive via the store; no need to manually update state
     } finally {
       setGenerating(false);
     }
   }
+
+  const reports = profile.reports;
 
   return (
     <div className="space-y-4">

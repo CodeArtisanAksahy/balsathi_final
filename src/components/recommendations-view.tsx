@@ -1,27 +1,27 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lightbulb, BookOpen, CheckCircle2, ChevronRight } from "lucide-react";
-import type { SessionUser, Recommendation } from "@/lib/domain";
+import type { SessionUser } from "@/lib/domain";
 import { cn } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren, getChildRecommendations } from "@/lib/selectors";
 
 export function RecommendationsView({
   session,
-  children,
-  selectedChild,
-  recommendations,
+  selectedChildId,
 }: {
   session: SessionUser;
-  children: Array<{ id: string; fullName: string }>;
-  selectedChild: { id: string; fullName: string } | null;
-  recommendations: Recommendation[];
+  selectedChildId?: string;
 }) {
   const router = useRouter();
-  const [childId, setChildId] = useState(selectedChild?.id ?? "");
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const childId = selectedChildId ?? children[0]?.id ?? "";
+  const recommendations = useStoreSelector((state) =>
+    childId ? getChildRecommendations(state, childId) : [],
+  );
 
   function selectChild(id: string) {
-    setChildId(id);
     router.push(`/recommendations?childId=${id}`);
   }
 

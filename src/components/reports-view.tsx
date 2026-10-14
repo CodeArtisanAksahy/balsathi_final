@@ -2,26 +2,31 @@
 
 import { useState } from "react";
 import { FileText, Download, Loader2, Plus } from "lucide-react";
-import type { SessionUser, ReportRecord } from "@/lib/domain";
-import { apiFetch } from "@/lib/fetch";
-import { getAuthorizedChildren } from "@/lib/data";
+import type { SessionUser } from "@/lib/domain";
 import { formatDate } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren } from "@/lib/selectors";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
 
-export function ReportsView({ session, reports: initial }: { session: SessionUser; reports: ReportRecord[] }) {
-  const [reports, setReports] = useState(initial);
+export function ReportsView({ session }: { session: SessionUser }) {
   const [generating, setGenerating] = useState(false);
   const [childId, setChildId] = useState("");
-  const children = getAuthorizedChildren(session);
 
-  async function generate() {
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const childIds = new Set(children.map((c) => c.id));
+  const reports = useStoreSelector((state) =>
+    state.reports
+      .filter((r) => r.childId && childIds.has(r.childId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  );
+
+  function generate() {
     if (!childId) return;
     setGenerating(true);
     try {
-      const report = await apiFetch<ReportRecord>("/api/reports", {
-        method: "POST",
-        body: JSON.stringify({ childId }),
-      });
-      setReports((r) => [report, ...r]);
+      storeActions.generateReport(session, childId);
+      toast.success("Report generated successfully.");
     } finally {
       setGenerating(false);
     }

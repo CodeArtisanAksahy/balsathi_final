@@ -2,35 +2,48 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
-import type { SessionUser, GrowthMeasurement } from "@/lib/domain";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import type { SessionUser, GrowthMeasurement, Child } from "@/lib/domain";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren, getChildGrowth } from "@/lib/selectors";
 
 export function GrowthComparison({
   session,
-  children,
-  selectedChild,
-  growth,
+  selectedChildId,
 }: {
   session: SessionUser;
-  children: Array<{ id: string; fullName: string; gender: string; dateOfBirth: string }>;
-  selectedChild: { id: string; fullName: string; gender: string; dateOfBirth: string } | null;
-  growth: GrowthMeasurement[];
+  selectedChildId?: string;
 }) {
   const router = useRouter();
-  const [childId, setChildId] = useState(selectedChild?.id ?? "");
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const childId = selectedChildId ?? children[0]?.id ?? "";
   const [metric, setMetric] = useState<"height" | "weight">("weight");
 
   function selectChild(id: string) {
-    setChildId(id);
     router.push(`/growth?childId=${id}`);
+  }
+
+  const selectedChild = children.find((c) => c.id === childId) ?? null;
+  const growth = useStoreSelector((state) =>
+    childId ? getChildGrowth(state, childId) : [],
+  );
+
+  if (children.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
+        <div className="card p-12 text-center text-stone-500">No children available.</div>
+      </div>
+    );
   }
 
   if (!selectedChild) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
+        <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
         <div className="card p-12 text-center text-stone-500">Select a child to view growth data.</div>
       </div>
     );
@@ -54,20 +67,7 @@ export function GrowthComparison({
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {children.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => selectChild(c.id)}
-            className={cn(
-              "px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition",
-              childId === c.id ? "bg-forest text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200",
-            )}
-          >
-            {c.fullName}
-          </button>
-        ))}
-      </div>
+      <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
 
       {/* Current measurements */}
       {last && (
@@ -146,6 +146,25 @@ export function GrowthComparison({
           <p className="text-center text-stone-400 py-6">No measurements recorded.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function ChildSelector({ children, selectedId, onSelect }: { children: Child[]; selectedId: string; onSelect: (id: string) => void }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-2">
+      {children.map((c) => (
+        <button
+          key={c.id}
+          onClick={() => onSelect(c.id)}
+          className={cn(
+            "px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition",
+            selectedId === c.id ? "bg-forest text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200",
+          )}
+        >
+          {c.fullName}
+        </button>
+      ))}
     </div>
   );
 }

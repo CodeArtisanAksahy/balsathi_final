@@ -7,23 +7,26 @@ export default async function LoginPage() {
   if (session) redirect("/dashboard");
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-forest flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-forest flex items-center justify-center mx-auto mb-4 shadow-lg shadow-forest/20">
             <svg viewBox="0 0 24 24" fill="none" className="w-9 h-9 text-white">
               <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
               <path d="M12 22V12M4 7l8 5 8-5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-stone-800">Balsathi AI</h1>
+          <h1 className="text-3xl font-bold text-stone-800">Balsathi AI</h1>
           <p className="text-stone-500 text-sm mt-1">Nurturing Every Child&apos;s Development Through AI</p>
+          <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-amber-light text-amber-700 text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            Demo Mode — Synthetic data for demonstration
+          </div>
         </div>
-        <div className="card p-6">
+        <div className="card p-6 shadow-xl">
           <LoginForm />
         </div>
         <p className="text-center text-xs text-stone-400 mt-4">
-          Demo accounts: worker@balsathi.demo, parent@balsathi.demo, admin@balsathi.demo
-          <br />Password: balsathi123
+          Authentication is simulated for demonstration. Use demo role cards below for quick access.
         </p>
       </div>
     </div>

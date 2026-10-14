@@ -3,26 +3,27 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle } from "lucide-react";
-import type { SessionUser, Message } from "@/lib/domain";
-import { apiFetch } from "@/lib/fetch";
+import type { SessionUser } from "@/lib/domain";
 import { formatDateTime } from "@/lib/utils";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren, getChildMessages } from "@/lib/selectors";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
 
 export function MessagesView({
   session,
-  children,
-  centers,
   selectedChildId,
-  messages: initialMessages,
 }: {
   session: SessionUser;
-  children: Array<{ id: string; fullName: string }>;
-  centers: Array<{ id: string; name: string }>;
-  selectedChildId: string;
-  messages: Message[];
+  selectedChildId?: string;
 }) {
   const router = useRouter();
-  const [childId, setChildId] = useState(selectedChildId);
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const childId = selectedChildId ?? children[0]?.id ?? "";
+  const messages = useStoreSelector((state) =>
+    childId ? getChildMessages(state, childId) : [],
+  );
+
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -37,20 +38,25 @@ export function MessagesView({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  async function send() {
+  function send() {
     if (!text.trim() || !childId) return;
     setSending(true);
     try {
-      const msg = await apiFetch<Message>("/api/messages", {
-        method: "POST",
-        body: JSON.stringify({ childId, locale: session.preferredLanguage, subject: "Message", body: text }),
+      storeActions.addMessage(session, {
+        childId,
+        locale: session.preferredLanguage,
+        subject: "Message",
+        body: text,
       });
-      setMessages((prev) => [...prev, msg]);
       setText("");
+    } catch {
+      toast.error("Failed to send message.");
     } finally {
       setSending(false);
     }
   }
+
+  const selectedChild = children.find((c) => c.id === childId);
 
   return (
     <div className="h-[calc(100vh-220px)] flex gap-4">
@@ -61,7 +67,7 @@ export function MessagesView({
           {children.map((c) => (
             <button
               key={c.id}
-              onClick={() => setChildId(c.id)}
+              onClick={() => router.push(`/messages?childId=${c.id}`)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
                 childId === c.id ? "bg-forest/10 text-forest font-medium" : "text-stone-600 hover:bg-stone-100"
               }`}
@@ -77,7 +83,7 @@ export function MessagesView({
         {childId ? (
           <>
             <div className="border-b border-stone-100 p-4">
-              <h3 className="font-semibold text-stone-800">{children.find((c) => c.id === childId)?.fullName}</h3>
+              <h3 className="font-semibold text-stone-800">{selectedChild?.fullName}</h3>
               <p className="text-xs text-stone-500">{session.role === "PARENT" ? "Anganwadi Worker" : "Parent / Guardian"}</p>
             </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">

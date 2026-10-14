@@ -2,29 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, Mic, Camera, FileText, ChevronDown } from "lucide-react";
+import { Save, Loader2, Mic, Camera, FileText } from "lucide-react";
 import type { SessionUser, ObservationMethod, DevelopmentDomain, AssessmentStatus } from "@/lib/domain";
 import { appLocales, developmentDomains, observationMethods, assessmentStatuses } from "@/lib/domain";
-import { apiFetch } from "@/lib/fetch";
 import { cn } from "@/lib/utils";
-
-type ChildOption = { id: string; fullName: string };
-type MilestoneOption = { id: string; slug: string; domain: DevelopmentDomain; title: Record<string, string> };
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren } from "@/lib/selectors";
+import { storeActions } from "@/lib/store-actions";
+import { toast } from "sonner";
 
 export function ObservationForm({
   session,
-  children,
-  milestones,
   initialChildId,
   initialMethod,
 }: {
   session: SessionUser;
-  children: ChildOption[];
-  milestones: MilestoneOption[];
   initialChildId?: string;
   initialMethod: ObservationMethod;
 }) {
   const router = useRouter();
+  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const milestones = useStoreSelector((state) =>
+    state.milestoneDefinitions.filter((m) => m.active),
+  );
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -48,15 +49,13 @@ export function ObservationForm({
     setLoading(true);
     setError("");
     try {
-      await apiFetch("/api/observations", {
-        method: "POST",
-        body: JSON.stringify({
-          ...form,
-          observedAt: new Date(form.observedAt).toISOString(),
-        }),
+      const result = storeActions.addObservation(session, {
+        ...form,
+        observedAt: new Date(form.observedAt).toISOString(),
+        attachmentIds: [],
       });
-      router.push(`/children/${form.childId}`);
-      router.refresh();
+      toast.success("Observation saved successfully.");
+      router.push(`/children/${result.observation.childId}`);
     } catch (err: any) {
       setError(err.message ?? "Failed to save observation");
     } finally {
