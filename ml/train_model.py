@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,8 +15,15 @@ from feature_engineering import FEATURES, supervised_frame
 from data_validation import load_monthly_counts
 
 
-def evaluate_and_train(csv_path: str, output_dir: str) -> dict:
+def evaluate_and_train(csv_path: str, output_dir: str, *, data_source: str = "unverified") -> dict:
     series = load_monthly_counts(csv_path)
+    source_path = Path(csv_path)
+    manifest_path = source_path.with_suffix(source_path.suffix + ".manifest.json")
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
+    if data_source == "database":
+        digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        if not manifest or manifest.get("data_source") != "postgresql_aggregate_export" or manifest.get("sha256") != digest or manifest.get("month_count") != len(series):
+            raise ValueError("Database training requires a matching PostgreSQL aggregate export manifest.")
     data = supervised_frame(series)
     holdout = max(3, int(np.ceil(len(data) * 0.2)))
     if len(data) - holdout < 12:
@@ -39,12 +47,21 @@ def evaluate_and_train(csv_path: str, output_dir: str) -> dict:
     }
     if metrics["candidate_mae"] >= metrics["baseline_mae"]:
         return {"trained": False, "reason": "Candidate did not outperform the baseline on held-out months.", "metrics": metrics}
+    if data_source == "database":
+        # A model may be accepted only after the documented baseline criterion.
+        # Keep provenance in the pickle and evaluation report for deployment audit.
+        source_label = "postgresql_aggregate_export"
+    elif data_source == "synthetic-test":
+        source_label = "synthetic_test_only"
+    else:
+        source_label = "unverified"
     candidate.fit(data[FEATURES], data["target"])
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
     artifact = target / "aggregate_observation_volume.joblib"
-    joblib.dump({"model": candidate, "features": FEATURES, "version": "aggregate-observation-volume-v1", "dataset_cutoff": str(series.index.max())}, artifact)
-    report = {"trained": True, "model_name": "aggregate_observation_volume", "model_version": "v1", "trained_at": datetime.now(timezone.utc).isoformat(), "artifact": artifact.name, "features": FEATURES, "metrics": metrics, "target": "monthly aggregate observation count; not child-level and not a developmental prediction"}
+    joblib.dump({"model": candidate, "features": FEATURES, "version": "aggregate-observation-volume-v1", "dataset_cutoff": str(series.index.max()), "data_source": source_label, "evaluation": metrics}, artifact)
+    artifact_digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    report = {"trained": True, "model_name": "aggregate_observation_volume", "model_version": "aggregate-observation-volume-v1", "trained_at": datetime.now(timezone.utc).isoformat(), "artifact": artifact.name, "artifact_sha256": artifact_digest, "data_source": source_label, "data_cutoff": str(series.index.max()), "sample_count": len(series), "supervised_sample_count": len(data), "metrics": metrics, "target": "monthly aggregate observation count; not child-level and not a developmental prediction", "real_data_validation": source_label == "postgresql_aggregate_export"}
     (target / "evaluation.json").write_text(json.dumps(report, indent=2))
     return report
 
@@ -53,5 +70,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("csv")
     parser.add_argument("--output", default="ml/artifacts")
+    parser.add_argument("--data-source", choices=("database", "synthetic-test", "unverified"), default="unverified")
     args = parser.parse_args()
-    print(json.dumps(evaluate_and_train(args.csv, args.output), indent=2))
+    print(json.dumps(evaluate_and_train(args.csv, args.output, data_source=args.data_source), indent=2))

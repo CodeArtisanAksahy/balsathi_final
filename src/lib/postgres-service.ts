@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ApiError } from "./authorization";
 import { config } from "./config";
 import { prisma } from "./prisma";
@@ -6,11 +6,12 @@ import type { AppLocale, SessionUser } from "./domain";
 import type { Prisma } from "@prisma/client";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { groupObservationCounts, milestoneCompletion } from "./analytics-math";
+import { completeMonthlyCounts, groupObservationCounts, milestoneCompletion } from "./analytics-math";
 import type { AssessmentStatus } from "./domain";
+import { forecastDashboardSchema } from "./forecast-contract";
 
 export function requirePostgresMode() {
   if (config.dataMode !== "postgres") throw new ApiError(409, "POSTGRES_MODE_REQUIRED", "This endpoint requires DATA_MODE=postgres.");
@@ -22,6 +23,19 @@ export function childScopeWhere(session: SessionUser): Prisma.ChildWhereInput {
   if (session.role === "PARENT") return { active: true, guardianLinks: { some: { guardian: { linkedUserId: session.id } } } };
   if (session.role === "WORKER") return { active: true, OR: [{ assignedWorkerId: session.id }, { centerId: { in: session.centerIds } }] };
   return { active: true, centerId: { in: session.centerIds } };
+}
+
+async function loadVerifiedModelEvaluation(artifact: string): Promise<Record<string, unknown> | null> {
+  try {
+    await access(artifact);
+    const evaluationPath = process.env.ML_EVALUATION_PATH ?? path.join(path.dirname(artifact), "evaluation.json");
+    const evaluation = JSON.parse(await readFile(/*turbopackIgnore: true*/ evaluationPath, "utf8")) as Record<string, unknown>;
+    const digest = createHash("sha256").update(await readFile(/*turbopackIgnore: true*/ artifact)).digest("hex");
+    if (evaluation.data_source !== "postgresql_aggregate_export" || evaluation.real_data_validation !== true || evaluation.artifact_sha256 !== digest || !evaluation.metrics || !evaluation.data_cutoff) return null;
+    return evaluation;
+  } catch {
+    return null;
+  }
 }
 
 export async function assertIdempotency(actorId: string, key: string | null, entityType: string) {
@@ -236,39 +250,74 @@ export async function createDatabaseRecommendation(session: SessionUser, input: 
 }
 
 export async function createAggregateObservationForecast(session: SessionUser) {
+  requirePostgresMode();
   if (session.role === "PARENT") throw new ApiError(403, "FORBIDDEN", "Aggregate model operations are not available to parent accounts.");
   const artifact = process.env.ML_MODEL_PATH;
   if (!artifact) throw new ApiError(503, "MODEL_NOT_CONFIGURED", "No evaluated model artifact is configured. Training has not been performed.");
-  const children = await prisma.child.findMany({ where: childScopeWhere(session), select: { id: true } });
-  const observations = await prisma.observation.findMany({ where: { childId: { in: children.map((child) => child.id) } }, select: { observedAt: true } });
-  const months = new Map<string, number>();
-  for (const observation of observations) {
-    const key = observation.observedAt.toISOString().slice(0, 7);
-    months.set(key, (months.get(key) ?? 0) + 1);
-  }
-  const first = [...months.keys()].sort()[0];
-  if (!first || months.size < 24) throw new ApiError(422, "INSUFFICIENT_HISTORY", `Forecast requires at least 24 months with records; available: ${months.size}. No prediction was generated.`);
-  const start = new Date(`${first}-01T00:00:00.000Z`);
-  const end = new Date(`${[...months.keys()].sort().at(-1)}-01T00:00:00.000Z`);
-  const records: Array<{ month: string; count: number }> = [];
-  for (const cursor = new Date(start); cursor <= end; cursor.setUTCMonth(cursor.getUTCMonth() + 1)) {
-    const key = cursor.toISOString().slice(0, 7);
-    records.push({ month: key, count: months.get(key) ?? 0 });
-  }
-  if (records.length < 24) throw new ApiError(422, "INSUFFICIENT_HISTORY", "Forecast requires 24 consecutive months of aggregate records.");
+  try { await access(artifact); } catch { throw new ApiError(503, "MODEL_ARTIFACT_MISSING", "The configured evaluated model artifact does not exist. No prediction was generated."); }
+  const verifiedEvaluation = await loadVerifiedModelEvaluation(artifact);
+  if (!verifiedEvaluation) throw new ApiError(503, "MODEL_EVALUATION_INVALID", "The configured artifact does not have matching verified PostgreSQL evaluation metadata. No prediction was generated.");
+  const monthlyRows = await prisma.$queryRaw<Array<{ month: string; count: number }>>`
+    SELECT to_char(date_trunc('month', o."observedAt" AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
+           COUNT(*)::int AS count
+    FROM "Observation" o
+    INNER JOIN "Child" c ON c."id" = o."childId"
+    WHERE c."active" = true
+      AND (${session.role === "DISTRICT_ADMIN"}::boolean OR c."centerId" = ANY(${session.centerIds}::text[]))
+    GROUP BY 1 ORDER BY 1
+  `;
+  const records = completeMonthlyCounts(monthlyRows);
+  if (!records.length) throw new ApiError(422, "INSUFFICIENT_HISTORY", "No observations are available; no prediction was generated.");
+  if (records.length < 24) throw new ApiError(422, "INSUFFICIENT_HISTORY", `Forecast requires 24 consecutive calendar months; available: ${records.length}. No prediction was generated.`);
   const directory = await mkdtemp(path.join(tmpdir(), "balsathi-forecast-"));
   try {
     const csv = path.join(directory, "monthly_counts.csv");
     await writeFile(csv, `month,count\n${records.map((row) => `${row.month},${row.count}`).join("\n")}\n`, { mode: 0o600 });
     const script = path.resolve(process.cwd(), "ml", "predict.py");
     const { stdout } = await promisify(execFile)(process.env.PYTHON_BIN ?? "python3", [script, csv, "--artifact", artifact], { timeout: 15_000, maxBuffer: 64_000 });
-    const prediction = JSON.parse(stdout) as { model_version: string; input_data_cutoff: string; predicted_count: number; month: string; prediction_type: string; confidence: null; note: string };
+    const prediction = JSON.parse(stdout) as { model_version: string; input_data_cutoff: string; training_data_cutoff: string; predicted_count: number; month: string; prediction_type: string; data_source: string; evaluation: Record<string, unknown>; confidence: null; note: string };
+    if (prediction.data_source !== "postgresql_aggregate_export" || prediction.prediction_type !== "aggregate_monthly_observation_volume" || !Number.isFinite(prediction.predicted_count) || prediction.predicted_count < 0 || !/^\d{4}-\d{2}$/.test(prediction.month) || !/^\d{4}-\d{2}$/.test(prediction.input_data_cutoff) || !/^\d{4}-\d{2}$/.test(prediction.training_data_cutoff) || prediction.confidence !== null) {
+      throw new ApiError(503, "INVALID_MODEL_OUTPUT", "The forecast model returned an invalid response; no prediction was saved.");
+    }
     const inputCutoff = new Date(`${prediction.input_data_cutoff}-01T00:00:00.000Z`);
-    const row = await prisma.mLPrediction.create({ data: { childId: null, scopeCenterIds: session.centerIds, modelName: "aggregate_observation_volume", modelVersion: prediction.model_version, predictionType: prediction.prediction_type, predictionValue: prediction, confidenceValue: null, inputDataCutoff: inputCutoff, modelArtifactVersion: prediction.model_version, explanation: { methodology: "Chronological holdout validated; aggregate count only", note: prediction.note }, reviewStatus: "GENERATED" } });
+    const scopeCenterIds = session.role === "DISTRICT_ADMIN" ? [...new Set((await prisma.child.findMany({ where: childScopeWhere(session), select: { centerId: true } })).map((item) => item.centerId))] : session.centerIds;
+    const row = await prisma.mLPrediction.create({ data: { childId: null, scopeCenterIds, modelName: "aggregate_observation_volume", modelVersion: prediction.model_version, predictionType: prediction.prediction_type, predictionValue: prediction as unknown as Prisma.InputJsonValue, confidenceValue: null, inputDataCutoff: inputCutoff, modelArtifactVersion: prediction.model_version, explanation: { methodology: "Chronological holdout validated; aggregate count only", note: prediction.note, evaluation: prediction.evaluation as Prisma.InputJsonValue, trainingDataCutoff: prediction.training_data_cutoff, artifactEvaluationMetadata: verifiedEvaluation as Prisma.InputJsonValue }, reviewStatus: "GENERATED" } });
     await prisma.auditLog.create({ data: { actorId: session.id, action: "prediction.generated", entityType: "MLPrediction", entityId: row.id, metadata: { modelVersion: row.modelVersion, predictionType: row.predictionType } } });
     return row;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(503, "MODEL_INFERENCE_FAILED", "The evaluated forecast model could not produce a prediction.");
   } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+export async function getAggregateForecastDashboard(session: SessionUser) {
+  requirePostgresMode();
+  if (session.role === "PARENT" || session.role === "WORKER") throw new ApiError(403, "FORBIDDEN", "Forecast data is available to center and district administrators only.");
+  const monthlyRows = await prisma.$queryRaw<Array<{ month: string; count: number }>>`
+    SELECT to_char(date_trunc('month', o."observedAt" AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
+           COUNT(*)::int AS count
+    FROM "Observation" o
+    INNER JOIN "Child" c ON c."id" = o."childId"
+    WHERE c."active" = true
+      AND (${session.role === "DISTRICT_ADMIN"}::boolean OR c."centerId" = ANY(${session.centerIds}::text[]))
+    GROUP BY 1 ORDER BY 1
+  `;
+  const history = completeMonthlyCounts(monthlyRows);
+  const scopeCenterIds = session.role === "DISTRICT_ADMIN"
+    ? [...new Set((await prisma.child.findMany({ where: childScopeWhere(session), select: { centerId: true } })).map(({ centerId }) => centerId))]
+    : session.centerIds;
+  const rows = await prisma.mLPrediction.findMany({
+    where: { predictionType: "aggregate_monthly_observation_volume", scopeCenterIds: { hasSome: scopeCenterIds } },
+    orderBy: { generatedAt: "desc" }, take: 30,
+  });
+  const artifact = process.env.ML_MODEL_PATH;
+  let evaluation: Record<string, unknown> | null = null;
+  if (artifact) evaluation = await loadVerifiedModelEvaluation(artifact);
+  const forecasts = rows.filter((row) => {
+    const value = row.predictionValue as Record<string, unknown>;
+    return value.data_source === "postgresql_aggregate_export" && value.prediction_type === "aggregate_monthly_observation_volume";
+  });
+  const response = forecastDashboardSchema.safeParse({ history, forecasts, evaluation, historyMonths: history.length });
+  if (!response.success) throw new ApiError(503, "FORECAST_RESPONSE_INVALID", "Stored forecast data failed response validation.");
+  return response.data;
 }

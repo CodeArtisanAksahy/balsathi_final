@@ -26,6 +26,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       const payload = await bootstrap.json();
       if (payload.data?.state) clientStore.replace(payload.data.state as DemoData);
     }
+    if (path.includes("/observations")) window.dispatchEvent(new CustomEvent("balsathi:observations-updated"));
   }
   return data.data as T;
 }
