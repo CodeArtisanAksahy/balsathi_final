@@ -22,8 +22,8 @@ def evaluate_and_train(csv_path: str, output_dir: str, *, data_source: str = "un
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
     if data_source == "database":
         digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
-        if not manifest or manifest.get("data_source") != "postgresql_aggregate_export" or manifest.get("sha256") != digest or manifest.get("month_count") != len(series):
-            raise ValueError("Database training requires a matching PostgreSQL aggregate export manifest.")
+        if not manifest or manifest.get("data_source") != "sqlite_aggregate_export" or manifest.get("sha256") != digest or manifest.get("month_count") != len(series):
+            raise ValueError("Database training requires a matching SQLite aggregate export manifest.")
     data = supervised_frame(series)
     holdout = max(3, int(np.ceil(len(data) * 0.2)))
     if len(data) - holdout < 12:
@@ -50,7 +50,7 @@ def evaluate_and_train(csv_path: str, output_dir: str, *, data_source: str = "un
     if data_source == "database":
         # A model may be accepted only after the documented baseline criterion.
         # Keep provenance in the pickle and evaluation report for deployment audit.
-        source_label = "postgresql_aggregate_export"
+        source_label = "sqlite_aggregate_export"
     elif data_source == "synthetic-test":
         source_label = "synthetic_test_only"
     else:
@@ -61,7 +61,7 @@ def evaluate_and_train(csv_path: str, output_dir: str, *, data_source: str = "un
     artifact = target / "aggregate_observation_volume.joblib"
     joblib.dump({"model": candidate, "features": FEATURES, "version": "aggregate-observation-volume-v1", "dataset_cutoff": str(series.index.max()), "data_source": source_label, "evaluation": metrics}, artifact)
     artifact_digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
-    report = {"trained": True, "model_name": "aggregate_observation_volume", "model_version": "aggregate-observation-volume-v1", "trained_at": datetime.now(timezone.utc).isoformat(), "artifact": artifact.name, "artifact_sha256": artifact_digest, "data_source": source_label, "data_cutoff": str(series.index.max()), "sample_count": len(series), "supervised_sample_count": len(data), "metrics": metrics, "target": "monthly aggregate observation count; not child-level and not a developmental prediction", "real_data_validation": source_label == "postgresql_aggregate_export"}
+    report = {"trained": True, "model_name": "aggregate_observation_volume", "model_version": "aggregate-observation-volume-v1", "trained_at": datetime.now(timezone.utc).isoformat(), "artifact": artifact.name, "artifact_sha256": artifact_digest, "data_source": source_label, "data_cutoff": str(series.index.max()), "sample_count": len(series), "supervised_sample_count": len(data), "metrics": metrics, "target": "monthly aggregate observation count; not child-level and not a developmental prediction", "real_data_validation": source_label == "sqlite_aggregate_export"}
     (target / "evaluation.json").write_text(json.dumps(report, indent=2))
     return report
 

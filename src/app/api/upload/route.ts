@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request): Promise<Response> {
   try {
     const session = await getActorFromSession();
-    if (config.dataMode === "postgres") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for PostgreSQL mode.");
+    if (config.dataMode === "sqlite") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for SQLite mode.");
     requirePermission(session.role, "observations:create");
     const contentLength = Number(request.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_UPLOAD_BYTES + 64 * 1024) {

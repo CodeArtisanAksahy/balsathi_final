@@ -28,7 +28,7 @@ function checkRateLimit(userId: string): void {
 export async function POST(request: Request): Promise<Response> {
   try {
     const session = await getActorFromSession();
-    if (config.dataMode === "postgres") throw new ApiError(501, "CHAT_NOT_CONFIGURED", "Chat logging and answer generation are not configured for PostgreSQL mode.");
+    if (config.dataMode === "sqlite") throw new ApiError(501, "CHAT_NOT_CONFIGURED", "Chat logging and answer generation are not configured for SQLite mode.");
     checkRateLimit(session.id);
     const input = chatSchema.parse(await readJson(request));
     const result = await processChat(session, input.locale, input.question, input.childId ?? undefined);

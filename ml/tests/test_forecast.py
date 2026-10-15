@@ -43,7 +43,7 @@ def test_missing_calendar_month_is_not_silently_fabricated(tmp_path):
 def test_database_training_requires_export_provenance_manifest(tmp_path):
     path = tmp_path / "counts.csv"
     pd.DataFrame({"month": pd.period_range("2020-01", periods=36, freq="M").astype(str), "count": [10] * 36}).to_csv(path, index=False)
-    with pytest.raises(ValueError, match="matching PostgreSQL aggregate export manifest"):
+    with pytest.raises(ValueError, match="matching SQLite aggregate export manifest"):
         evaluate_and_train(str(path), str(tmp_path / "artifact"), data_source="database")
 
 

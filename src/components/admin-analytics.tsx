@@ -63,10 +63,10 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
 
   const isAdmin = session.role === "CENTER_ADMIN" || session.role === "DISTRICT_ADMIN";
 
-  // ── Fetch stored forecasts on mount (postgres mode only) ─────────────────
+  // ── Fetch stored forecasts on mount (SQLite mode only) ─────────────────
   const refreshForecast = useCallback(async (cancelled?: () => boolean) => {
     const mode = await getConfiguredDataMode();
-    if (mode !== "postgres") { setForecast({ status: "unavailable" }); return; }
+    if (mode !== "sqlite") { setForecast({ status: "unavailable" }); return; }
     setForecast({ status: "loading" });
     try {
       const data = await apiFetch<ForecastPayload>("/api/v1/analytics/forecast");
@@ -120,7 +120,7 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     value: filteredObservations.filter((observation) => observation.domain === domain).length,
   }));
 
-  // The API's database aggregation is the source of actual monthly values in PostgreSQL mode.
+  // The API's database aggregation is the source of actual monthly values in SQLite mode.
   const trendData = useMemo(() => {
     const map = new Map<string, { month: string; observations?: number; forecast?: number }>();
     const history = forecast.status === "ok" ? forecast.data.history : [];
@@ -215,7 +215,7 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
               {forecastStale && latestMonth && <> · Actuals now extend through {latestMonth}; the saved forecast is unchanged until you run it again.</>}
             </p>
           </div>
-          {/* Run Forecast button – only in postgres mode for admins */}
+          {/* Run Forecast button – only in SQLite mode for admins */}
           {isAdmin && forecast.status !== "unavailable" && (
             <button
               id="run-forecast-btn"
@@ -293,7 +293,7 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
         )}
         {evaluation && <p className="text-xs text-stone-400 mt-1">Last evaluation: {String(evaluation.trained_at ?? evaluation.evaluated_at ?? "date unavailable")} · cutoff {String(evaluation.data_cutoff ?? evaluation.metrics?.dataset_cutoff ?? "unavailable")} · holdout {String(evaluation.metrics?.test_start ?? "?")} to {String(evaluation.metrics?.test_end ?? "?")} · MAE {String(evaluation.metrics?.candidate_mae ?? "unavailable")} · RMSE {String(evaluation.metrics?.candidate_rmse ?? "unavailable")}</p>}
         {forecast.status === "unavailable" && (
-          <p className="text-xs text-stone-400 mt-2 italic">Forecast panel requires DATA_MODE=postgres and an admin account.</p>
+          <p className="text-xs text-stone-400 mt-2 italic">Forecast panel requires DATA_MODE=sqlite and an admin account.</p>
         )}
       </div>
     </div>

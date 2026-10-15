@@ -7,11 +7,11 @@ import { forecastDashboardSchema } from "@/lib/forecast-contract";
 import { prisma } from "@/lib/prisma";
 
 function requireTestDatabase() {
-  if (config.dataMode !== "postgres") throw new Error("Run with DATA_MODE=postgres.");
-  if (process.env.ALLOW_POSTGRES_INTEGRATION_FIXTURES !== "true") throw new Error("Set ALLOW_POSTGRES_INTEGRATION_FIXTURES=true to authorize temporary isolated test fixtures.");
+  if (config.dataMode !== "sqlite") throw new Error("Run with DATA_MODE=sqlite.");
+  if (process.env.ALLOW_SQLITE_INTEGRATION_FIXTURES !== "true") throw new Error("Set ALLOW_SQLITE_INTEGRATION_FIXTURES=true to authorize temporary isolated test fixtures.");
   if (process.env.NODE_ENV === "production") throw new Error("Refusing to run temporary integration fixtures in production.");
   const databaseName = config.databaseUrl ? new URL(config.databaseUrl).pathname.replace(/^\//, "") : "";
-  if (!/(^|[-_])test($|[-_])|^balsathi_ai$/i.test(databaseName)) throw new Error("DATABASE_URL must target a clearly named test database such as balsathi_ai.");
+  if (!/(^|[-_])test($|[-_])|^test\.db$/i.test(databaseName)) throw new Error("DATABASE_URL must target a dedicated SQLite test.db file.");
 }
 
 async function main() {
@@ -53,8 +53,8 @@ async function main() {
       ] });
       await tx.guardian.create({ data: { id: guardianId, name: "Test Guardian", phone: "0000000004", address: "Test", linkedUserId: parentId } });
       await tx.child.createMany({ data: [
-        { id: childId, internalId: `IT-${suffix}`, fullName: "Integration Child", dateOfBirth: new Date("2022-01-01T00:00:00Z"), centerId, assignedWorkerId: workerId, emergencyContactName: "Test", emergencyContactPhone: "0000000005" },
-        { id: otherChildId, internalId: `ITO-${suffix}`, fullName: "Other Integration Child", dateOfBirth: new Date("2022-01-01T00:00:00Z"), centerId: otherCenterId, assignedWorkerId: otherAdminId, emergencyContactName: "Test", emergencyContactPhone: "0000000006" },
+        { id: childId, internalId: `IT-${suffix}`, fullName: "Integration Child", dateOfBirth: new Date("2022-01-01T00:00:00Z"), centerId, assignedWorkerId: workerId, emergencyContactName: "Test", emergencyContactPhone: "0000000005", siblingIds: [] },
+        { id: otherChildId, internalId: `ITO-${suffix}`, fullName: "Other Integration Child", dateOfBirth: new Date("2022-01-01T00:00:00Z"), centerId: otherCenterId, assignedWorkerId: otherAdminId, emergencyContactName: "Test", emergencyContactPhone: "0000000006", siblingIds: [] },
       ] });
       await tx.childGuardian.create({ data: { childId, guardianId, relationship: "MOTHER", isPrimary: true } });
       await tx.milestoneDefinition.create({ data: {
@@ -76,10 +76,12 @@ async function main() {
       });
     };
 
-    const loginResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: `worker-${email}`, password: "Temporary-Integration-Password-1" }) });
-    assert.equal(loginResponse.status, 200, `PostgreSQL login failed: ${loginResponse.status}`);
+    const loginEmail = `worker-${email}`;
+    await prisma.user.update({ where: { id: workerId }, data: { email: loginEmail } });
+    const loginResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: loginEmail, password: "Temporary-Integration-Password-1" }) });
+    assert.equal(loginResponse.status, 200, `SQLite login failed: ${loginResponse.status}`);
     const loginCookie = loginResponse.headers.get("set-cookie")?.split(";")[0];
-    assert.ok(loginCookie, "PostgreSQL login did not issue a session cookie.");
+    assert.ok(loginCookie, "SQLite login did not issue a session cookie.");
     const activeSession = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/session`, { headers: { cookie: loginCookie } });
     assert.equal(activeSession.status, 200);
     const changedRole = await prisma.user.update({ where: { id: workerId }, data: { role: "PARENT" } });
@@ -132,13 +134,13 @@ async function main() {
     assert.equal(invalid.status, 400, "Invalid observation input was accepted.");
 
     const ready = await fetch(`${baseUrl.replace(/\/$/, "")}/api/health/ready`);
-    assert.equal(ready.status, 200, "Readiness endpoint did not report available PostgreSQL.");
+    assert.equal(ready.status, 200, "Readiness endpoint did not report available SQLite.");
     const forecast = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/analytics/forecast`, { method: "POST", headers: { cookie: `${config.sessionCookie}=${await sign(adminId, "CENTER_ADMIN", [centerId])}` } });
     assert.equal(forecast.status, 503, "Forecast should fail without a real evaluated artifact.");
     const forecastError = await forecast.json();
     assert.ok(["MODEL_NOT_CONFIGURED", "MODEL_ARTIFACT_MISSING", "MODEL_EVALUATION_INVALID", "INSUFFICIENT_HISTORY"].includes(forecastError.error?.code), `Unexpected forecast failure: ${forecastError.error?.code}`);
 
-    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", postgres_login: "verified", center_isolation: "verified", parent_link_scope: "verified", observation_create_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
+    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", center_isolation: "verified", parent_link_scope: "verified", observation_create_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
   } finally {
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.deleteMany({ where: { entityId: { contains: suffix } } });
@@ -152,13 +154,13 @@ async function main() {
       await tx.user.deleteMany({ where: { id: { in: [workerId, adminId, parentId, otherAdminId] } } });
       await tx.center.deleteMany({ where: { id: { in: [centerId, otherCenterId] } } });
     });
-    const remaining = await prisma.$queryRaw<Array<{ centers: number; users: number; children: number; observations: number }>>`
-      SELECT (SELECT count(*)::int FROM "Center" WHERE "id" IN (${centerId}, ${otherCenterId})) AS centers,
-             (SELECT count(*)::int FROM "User" WHERE "id" IN (${workerId}, ${adminId}, ${parentId}, ${otherAdminId})) AS users,
-             (SELECT count(*)::int FROM "Child" WHERE "id" IN (${childId}, ${otherChildId})) AS children,
-             (SELECT count(*)::int FROM "Observation" WHERE "childId" IN (${childId}, ${otherChildId})) AS observations
-    `;
-    assert.deepEqual(remaining[0], { centers: 0, users: 0, children: 0, observations: 0 }, "Temporary integration fixtures were not fully cleaned up.");
+    const [centers, users, children, observations] = await Promise.all([
+      prisma.center.count({ where: { id: { in: [centerId, otherCenterId] } } }),
+      prisma.user.count({ where: { id: { in: [workerId, adminId, parentId, otherAdminId] } } }),
+      prisma.child.count({ where: { id: { in: [childId, otherChildId] } } }),
+      prisma.observation.count({ where: { childId: { in: [childId, otherChildId] } } }),
+    ]);
+    assert.deepEqual({ centers, users, children, observations }, { centers: 0, users: 0, children: 0, observations: 0 }, "Temporary integration fixtures were not fully cleaned up.");
   }
 }
 
@@ -170,7 +172,7 @@ async function runReadOnlyIntegration(baseUrl: string, adminId: string) {
   const endpoint = baseUrl.replace(/\/$/, "");
   const cookie = `${config.sessionCookie}=${token}`;
   const ready = await fetch(`${endpoint}/api/health/ready`);
-  assert.equal(ready.status, 200, "PostgreSQL readiness check failed.");
+  assert.equal(ready.status, 200, "SQLite readiness check failed.");
   const unauthorized = await fetch(`${endpoint}/api/v1/analytics/forecast`);
   assert.equal(unauthorized.status, 401, "Forecast endpoint accepted an unauthenticated request.");
   const historyResponse = await fetch(`${endpoint}/api/v1/analytics/forecast`, { headers: { cookie } });
@@ -197,6 +199,6 @@ async function runReadOnlyIntegration(baseUrl: string, adminId: string) {
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "PostgreSQL integration test failed.");
+  console.error(error instanceof Error ? error.message : "SQLite integration test failed.");
   process.exitCode = 1;
 }).finally(() => prisma.$disconnect());

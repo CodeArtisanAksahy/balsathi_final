@@ -18,7 +18,7 @@ export async function GET(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "reports:read");
     const childId = new URL(request.url).searchParams.get("childId");
-    if (config.dataMode === "postgres") { if (!childId) return jsonResponse([]); await requireDatabaseChildAccess(session, childId); return jsonResponse(await prisma.reportRecord.findMany({ where: { childId }, orderBy: { createdAt: "desc" } })); }
+    if (config.dataMode === "sqlite") { if (!childId) return jsonResponse([]); await requireDatabaseChildAccess(session, childId); return jsonResponse(await prisma.reportRecord.findMany({ where: { childId }, orderBy: { createdAt: "desc" } })); }
     if (!childId) return jsonResponse([]);
     const reports = getChildReports(session, childId);
     return jsonResponse(reports);
@@ -32,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "reports:create");
     const input = reportGenerateSchema.parse(await readJson(request));
-    if (config.dataMode === "postgres") {
+    if (config.dataMode === "sqlite") {
       const child = await requireDatabaseChildAccess(session, input.childId);
       const [observations, risks, recommendations, achievedMilestones, growthCount] = await prisma.$transaction([
         prisma.observation.count({ where: { childId: child.id } }), prisma.riskAssessment.count({ where: { childId: child.id, reviewRequired: true } }), prisma.recommendation.count({ where: { childId: child.id, status: "ACTIVE" } }), prisma.milestoneAssessment.count({ where: { childId: child.id, status: "MET" } }), prisma.growthMeasurement.count({ where: { childId: child.id } }),

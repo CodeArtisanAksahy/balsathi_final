@@ -289,7 +289,7 @@ function ReportsTab({ session, profile }: { session: SessionUser; profile: NonNu
   async function generate() {
     setGenerating(true);
     try {
-      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId: profile.child.id }) });
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId: profile.child.id }) });
       else storeActions.generateReport(session, profile.child.id);
       toast.success("Report generated successfully.");
       // Reports are reactive via the store; no need to manually update state

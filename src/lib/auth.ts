@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getDemoStore } from "./demo-store";
 import { assertSecureAuthConfiguration, config } from "./config";
 import type { AppLocale, SessionUser, User } from "./domain";
+import { appLocales, appRoles } from "./domain";
 
 const encoder = new TextEncoder();
 const SESSION_COOKIE = config.sessionCookie;
@@ -64,19 +65,20 @@ export async function getSession(): Promise<SessionUser | null> {
     const role = payload.payload.role as SessionUser["role"];
     if (!id || !["WORKER", "PARENT", "CENTER_ADMIN", "DISTRICT_ADMIN"].includes(role)) return null;
 
-    // In PostgreSQL mode, JWT claims are only an identity pointer. Reload active
+    // In SQLite mode, JWT claims are only an identity pointer. Reload active
     // authorization attributes so deactivation and scope changes take effect now.
-    if (config.dataMode === "postgres") {
+    if (config.dataMode === "sqlite") {
       const { prisma } = await import("./prisma");
       const user = await prisma.user.findUnique({ where: { id } });
-      if (!user?.active) return null;
+      if (!user?.active || !appRoles.includes(user.role as SessionUser["role"]) || !appLocales.includes(user.preferredLanguage as AppLocale)) return null;
+      const centerIds = Array.isArray(user.centerIds) && user.centerIds.every((centerId) => typeof centerId === "string") ? user.centerIds as string[] : [];
       return {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
-        preferredLanguage: user.preferredLanguage,
-        centerIds: user.centerIds,
+        role: user.role as SessionUser["role"],
+        preferredLanguage: user.preferredLanguage as AppLocale,
+        centerIds,
       };
     }
     return {

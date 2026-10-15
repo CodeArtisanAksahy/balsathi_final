@@ -3,7 +3,7 @@ import { getActorFromSession, requirePermission, requireDatabaseChildAccess } fr
 import { addMilestoneAssessment, getChildMilestoneAssessments, getMilestoneDefinitions } from "@/lib/data";
 import { z } from "zod";
 import { config } from "@/lib/config";
-import { createDatabaseMilestoneAssessment } from "@/lib/postgres-service";
+import { createDatabaseMilestoneAssessment } from "@/lib/database-service";
 import { prisma } from "@/lib/prisma";
 import { assessmentStatuses } from "@/lib/domain";
 
@@ -22,7 +22,7 @@ export async function GET(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "milestones:read");
     const childId = new URL(request.url).searchParams.get("childId");
-    if (config.dataMode === "postgres") {
+    if (config.dataMode === "sqlite") {
       const definitions = await prisma.milestoneDefinition.findMany({ where: { active: true }, orderBy: [{ minAgeMonths: "asc" }, { slug: "asc" }] });
       const assessments = childId ? await prisma.milestoneAssessment.findMany({ where: { childId }, include: { milestone: true }, orderBy: { assessedAt: "desc" } }) : [];
       if (childId) await requireDatabaseChildAccess(session, childId);
@@ -43,7 +43,7 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "milestones:create");
     const input = milestoneAssessmentSchema.parse(await readJson(request));
-    if (config.dataMode === "postgres") return jsonResponse(await createDatabaseMilestoneAssessment(session, input.childId, input), 201);
+    if (config.dataMode === "sqlite") return jsonResponse(await createDatabaseMilestoneAssessment(session, input.childId, input), 201);
     const assessment = addMilestoneAssessment(session, input);
     return jsonResponse(assessment, 201);
   } catch (error) {

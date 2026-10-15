@@ -26,7 +26,7 @@ export function ReportsView({ session }: { session: SessionUser }) {
     if (!childId) return;
     setGenerating(true);
     try {
-      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId }) });
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/reports", { method: "POST", body: JSON.stringify({ childId }) });
       else storeActions.generateReport(session, childId);
       toast.success("Report generated successfully.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not generate report."); }

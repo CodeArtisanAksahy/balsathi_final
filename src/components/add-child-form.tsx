@@ -58,7 +58,7 @@ export function AddChildForm({
           relationship: form.guardian.relationship as "MOTHER" | "FATHER" | "GRANDPARENT" | "SIBLING" | "OTHER",
         },
       };
-      const child = await getConfiguredDataMode() === "postgres"
+      const child = await getConfiguredDataMode() === "sqlite"
         ? await apiFetch<{ id: string; fullName: string }>("/api/children", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(input) })
         : storeActions.addChild(session, input);
       toast.success(`Child "${child.fullName}" registered successfully.`);

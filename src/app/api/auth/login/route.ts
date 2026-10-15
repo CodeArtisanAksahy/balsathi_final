@@ -13,7 +13,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     enforceRateLimit(request, "login", config.rateLimit.authMaxPerMinute);
     const input = loginSchema.parse(await readJson(request));
-    const user = config.dataMode === "postgres"
+    const user = config.dataMode === "sqlite"
       ? await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } })
       : getDemoUserByEmail(input.email);
     if (!user || !user.active) {

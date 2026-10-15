@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request): Promise<Response> {
   try {
     const session = await getActorFromSession();
-    if (config.dataMode === "postgres") throw new ApiError(501, "TRANSCRIPTION_NOT_CONFIGURED", "A production transcription provider and database audit path are not configured.");
+    if (config.dataMode === "sqlite") throw new ApiError(501, "TRANSCRIPTION_NOT_CONFIGURED", "A production transcription provider and database audit path are not configured.");
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const locale = (formData.get("locale") as string | null) ?? session.preferredLanguage;

@@ -3,102 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum AppRole {
-  WORKER
-  PARENT
-  CENTER_ADMIN
-  DISTRICT_ADMIN
-}
-
-enum Gender {
-  FEMALE
-  MALE
-  OTHER
-  UNSPECIFIED
-}
-
-enum GuardianRelationship {
-  MOTHER
-  FATHER
-  GRANDPARENT
-  SIBLING
-  OTHER
-}
-
-enum DevelopmentDomain {
-  PHYSICAL
-  COGNITIVE
-  LANGUAGE
-  SOCIAL
-  EMOTIONAL
-}
-
-enum ObservationMethod {
-  TEXT
-  VOICE
-  PHOTO
-}
-
-enum ObservationStatus {
-  DRAFT
-  REVIEW_PENDING
-  VERIFIED
-}
-
-enum AssessmentStatus {
-  MET
-  IN_PROGRESS
-  NEEDS_REVIEW
-  NOT_OBSERVED
-  NOT_ASSESSED
-  NOT_APPLICABLE
-}
-
-enum FollowUpStatus {
-  OPEN
-  IN_PROGRESS
-  RESOLVED
-  CANCELLED
-}
-
-enum FollowUpPriority {
-  LOW
-  NORMAL
-  HIGH
-}
-
-enum PredictionReviewStatus {
-  GENERATED
-  REVIEWED
-  DISMISSED
-}
-
-enum RiskLevel {
-  LOW
-  MODERATE
-  HIGH
-}
-
-enum MessageDirection {
-  WORKER_TO_PARENT
-  PARENT_TO_WORKER
-  SYSTEM
-}
-
-enum AttachmentKind {
-  IMAGE
-  AUDIO
-  DOCUMENT
-}
-
-enum AppLocale {
-  en
-  hi
-  mr
 }
 
 model Center {
@@ -119,10 +25,10 @@ model User {
   id                String    @id @default(cuid())
   name              String
   email             String    @unique
-  role              AppRole   @default(WORKER)
+  role              String    @default("WORKER")
   phone             String
-  preferredLanguage AppLocale @default(en)
-  centerIds         String[]
+  preferredLanguage String   @default("en")
+  centerIds         Json
   active            Boolean   @default(true)
   passwordHash      String
   guardians         Guardian[]
@@ -144,7 +50,7 @@ model Guardian {
   id                String    @id @default(cuid())
   name              String
   phone             String
-  preferredLanguage AppLocale @default(en)
+  preferredLanguage String   @default("en")
   address           String
   linkedUserId      String?
   linkedUser        User?     @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
@@ -156,7 +62,7 @@ model Guardian {
 model ChildGuardian {
   childId      String
   guardianId   String
-  relationship GuardianRelationship
+  relationship String
   isPrimary    Boolean   @default(false)
   child        Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
   guardian     Guardian  @relation(fields: [guardianId], references: [id], onDelete: Cascade)
@@ -168,17 +74,17 @@ model Child {
   id                    String              @id @default(cuid())
   internalId            String              @unique
   fullName              String
-  dateOfBirth           DateTime            @db.Date
-  gender                Gender              @default(UNSPECIFIED)
+  dateOfBirth           DateTime
+  gender                String              @default("UNSPECIFIED")
   centerId              String
   assignedWorkerId      String
   enrollmentDate        DateTime            @default(now())
   profilePhotoPath      String?
-  primaryLanguage       AppLocale           @default(en)
+  primaryLanguage       String              @default("en")
   consentStatus         String              @default("PENDING")
   emergencyContactName  String
   emergencyContactPhone String
-  siblingIds            String[]
+  siblingIds            Json
   active                Boolean             @default(true)
   center                Center              @relation(fields: [centerId], references: [id], onDelete: Restrict)
   assignedWorker        User                @relation("AssignedWorker", fields: [assignedWorkerId], references: [id], onDelete: Restrict)
@@ -223,7 +129,7 @@ model AttachmentRecord {
   id              String   @id @default(cuid())
   observationId   String?
   childId         String
-  kind            AttachmentKind
+  kind            String
   fileName        String
   storageKey      String
   mimeType        String
@@ -241,19 +147,19 @@ model Observation {
   childId            String
   createdById        String
   observedAt         DateTime
-  method             ObservationMethod
-  observationLanguage AppLocale         @default(en)
-  domain             DevelopmentDomain
+  method             String
+  observationLanguage String            @default("en")
+  domain             String
   activityContext    String
-  observationText    String              @db.Text
-  workerNotes        String              @db.Text
-  originalText       String?             @db.Text
+  observationText    String
+  workerNotes        String
+  originalText       String?
   idempotencyKey     String?
-  aiTranscript       String?             @db.Text
-  aiExtractedSummary String?             @db.Text
+  aiTranscript       String?
+  aiExtractedSummary String?
   followUpRequired   Boolean             @default(false)
-  reviewStatus       ObservationStatus   @default(REVIEW_PENDING)
-  attachmentIds      String[]
+  reviewStatus       String              @default("REVIEW_PENDING")
+  attachmentIds      Json
   child              Child               @relation(fields: [childId], references: [id], onDelete: Cascade)
   createdBy          User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
   assessments        MilestoneAssessment[]
@@ -269,19 +175,19 @@ model Observation {
 model MilestoneDefinition {
   id                String              @id @default(cuid())
   slug              String              @unique
-  domain            DevelopmentDomain
+  domain            String
   titleEn           String
   titleHi           String
   titleMr           String
-  descriptionEn     String              @db.Text
-  descriptionHi     String              @db.Text
-  descriptionMr     String              @db.Text
+  descriptionEn     String
+  descriptionHi     String
+  descriptionMr     String
   minAgeMonths      Int
   maxAgeMonths      Int
   reviewAfterMonths Int
-  activitiesEn      String[]
-  activitiesHi      String[]
-  activitiesMr      String[]
+  activitiesEn      Json
+  activitiesHi      Json
+  activitiesMr      Json
   active            Boolean             @default(true)
   assessments       MilestoneAssessment[]
   createdAt         DateTime            @default(now())
@@ -296,8 +202,8 @@ model MilestoneAssessment {
   observationId      String?
   assessedById       String
   assessedAt         DateTime
-  status             AssessmentStatus
-  notes              String            @db.Text
+  status             String
+  notes              String
   child              Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
   milestone          MilestoneDefinition @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
   observation        Observation?      @relation(fields: [observationId], references: [id], onDelete: SetNull)
@@ -314,14 +220,14 @@ model MilestoneAssessment {
 model DevelopmentAssessment {
   id                    String            @id @default(cuid())
   childId               String
-  domain                DevelopmentDomain
+  domain                String
   score                 Float
   assessmentMethod      String
   assessmentVersion     String
   assessedById          String
   assessedAt            DateTime
   sourceObservationId   String?
-  notes                 String            @db.Text
+  notes                 String
   child                 Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
   assessedBy            User              @relation(fields: [assessedById], references: [id], onDelete: Restrict)
   sourceObservation     Observation?      @relation(fields: [sourceObservationId], references: [id], onDelete: SetNull)
@@ -336,10 +242,10 @@ model FollowUp {
   childId         String
   observationId   String?
   assignedToId    String?
-  status          FollowUpStatus   @default(OPEN)
-  priority        FollowUpPriority @default(NORMAL)
+  status          String           @default("OPEN")
+  priority        String           @default("NORMAL")
   dueDate         DateTime?
-  resolutionNotes String           @default("") @db.Text
+  resolutionNotes String           @default("")
   child           Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
   observation     Observation?     @relation(fields: [observationId], references: [id], onDelete: SetNull)
   assignedTo      User?            @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
@@ -353,7 +259,7 @@ model FollowUp {
 model MLPrediction {
   id                   String                @id @default(cuid())
   childId              String?
-  scopeCenterIds       String[]              @default([])
+  scopeCenterIds       Json
   modelName            String
   modelVersion         String
   predictionType       String
@@ -363,7 +269,7 @@ model MLPrediction {
   generatedAt          DateTime              @default(now())
   modelArtifactVersion String
   explanation          Json
-  reviewStatus         PredictionReviewStatus @default(GENERATED)
+  reviewStatus         String                @default("GENERATED")
   child                Child?                @relation(fields: [childId], references: [id], onDelete: SetNull)
   @@index([childId, predictionType, generatedAt])
   @@index([modelName, modelVersion])
@@ -383,9 +289,9 @@ model IdempotencyRecord {
 model RiskAssessment {
   id                    String               @id @default(cuid())
   childId               String
-  level                 RiskLevel
+  level                 String
   title                 String
-  explanation           String               @db.Text
+  explanation           String
   sourceObservationId   String?
   sourceMilestoneId     String?
   reviewRequired        Boolean              @default(true)
@@ -400,9 +306,9 @@ model Recommendation {
   id                String    @id @default(cuid())
   childId           String
   createdById       String
-  locale            AppLocale @default(en)
+  locale            String    @default("en")
   title             String
-  description       String    @db.Text
+  description       String
   approvedForParent Boolean   @default(false)
   status            String    @default("PENDING")
   child             Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -417,10 +323,10 @@ model Message {
   childId     String
   fromUserId  String
   toUserId    String
-  direction   MessageDirection
-  locale      AppLocale        @default(en)
+  direction   String
+  locale      String           @default("en")
   subject     String
-  body        String           @db.Text
+  body        String
   readAt      DateTime?
   child       Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
   fromUser    User             @relation("MessageSender", fields: [fromUserId], references: [id], onDelete: Restrict)
@@ -437,7 +343,7 @@ model ReportRecord {
   generatedById String
   title         String
   periodLabel   String
-  summary       String   @db.Text
+  summary       String
   child         Child?   @relation(fields: [childId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -448,10 +354,10 @@ model ChatLog {
   id              String    @id @default(cuid())
   userId          String
   childId         String?
-  locale          AppLocale @default(en)
-  question        String    @db.Text
-  responseSummary String    @db.Text
-  sourceRefs      String[]
+  locale          String    @default("en")
+  question        String
+  responseSummary String
+  sourceRefs      Json
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   child           Child?    @relation(fields: [childId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())

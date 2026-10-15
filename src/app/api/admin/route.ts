@@ -11,7 +11,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const session = await getActorFromSession();
     requirePermission(session.role, "admin:read");
-    if (config.dataMode === "postgres") throw new ApiError(501, "ADMIN_VIEW_NOT_CONFIGURED", "This legacy admin view is not yet backed by database queries.");
+    if (config.dataMode === "sqlite") throw new ApiError(501, "ADMIN_VIEW_NOT_CONFIGURED", "This legacy admin view is not yet backed by database queries.");
     const { searchParams } = new URL(request.url);
     const view = searchParams.get("view");
     if (view === "centers") return jsonResponse(getCenters(session));

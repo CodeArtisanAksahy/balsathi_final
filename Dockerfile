@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -16,6 +16,9 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv \
   && rm -rf /var/lib/apt/lists/* \
   && python3 -m venv /opt/balsathi-ml
@@ -26,7 +29,10 @@ ENV PATH="/opt/balsathi-ml/bin:${PATH}"
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/prisma ./prisma
+COPY scripts/start-container.mjs ./scripts/start-container.mjs
 COPY ml ./ml
+RUN mkdir -p /app/data
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "scripts/start-container.mjs"]

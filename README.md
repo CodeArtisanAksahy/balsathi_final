@@ -1,96 +1,74 @@
 # Balsathi AI
 
-**Demo and incomplete PostgreSQL implementation.** This repository contains a Next.js application, demo fixtures, selected Prisma-backed routes, and an aggregate forecast workflow. PostgreSQL support is partial and is not production-ready.
+**Local demo and SQLite-backed application.** This repository contains a Next.js application, Prisma persistence, demo fixtures, and an aggregate observation-volume forecast workflow. SQLite is intended for local and single-instance use; production operations, privacy review, and durable backup procedures still need work.
 
-Balsathi AI is planned as a small child-development record demonstration for workers, parents, and administrators, with English, Hindi, and Marathi UI and a record-grounded demo assistant.
+Balsathi AI is a child-development record demonstration for workers, parents, and administrators, with English, Hindi, and Marathi UI and a record-grounded assistant.
 
-> **Demo only:** use fictional people and synthetic records. Demo role selection is not real authentication. Sample milestones and follow-up flags are not a validated screening tool or a clinical assessment.
+> **Demo and safety boundary:** use fictional people and synthetic records. Demo role selection is not real identity verification. Sample milestones and follow-up flags are not a validated screening tool or a clinical assessment.
 
-## Planned MVP experience
+## Storage modes
 
-- Sign in as a provisioned PostgreSQL user or select an allowlisted demo worker, parent, or administrator and receive an HTTP-only session cookie.
-- View seeded child records appropriate to that identity.
-- As an assigned worker, add a dated observation and record a sample milestone result.
-- See transparent follow-up flags linked to their underlying observation or milestone result.
-- As a parent, view only linked synthetic children; as an administrator, view all demo records and summary counts. Both views are read-only.
-- Switch static UI and assistant responses among English (`en`), Hindi (`hi`), and Marathi (`mr`). Entered notes retain their original text.
-- Use three assistant prompts—summary, milestones, and next steps—with answers generated from the selected child's authorized records and source references.
+- `DATA_MODE=demo` uses synthetic fixtures and process-local mutations. It needs no database and does not provide durable storage.
+- `DATA_MODE=sqlite` uses Prisma with a local SQLite file. The default `DATABASE_URL="file:./dev.db"` resolves to `prisma/dev.db` relative to `prisma/schema.prisma`.
+- Database errors do not silently switch to demo records. The browser never connects to SQLite directly.
 
-The assistant is a **local template-based demo**, not an external LLM or unrestricted medical chatbot. Unknown information stays unknown.
+SQLite is suited to local development or a single application instance with a persistent writable disk. Do not share a SQLite file between application replicas or place it on an unverified network filesystem.
 
-## Technical target
-
-| Layer | Planned choice |
-| --- | --- |
-| Frontend | Next.js App Router, React, TypeScript; shared role-aware components. |
-| API | Same-origin Next.js route handlers on the Node.js runtime. |
-| Required demo storage | Synthetic fixtures plus process-local, in-memory mutations. |
-| Persistence target | Prisma with PostgreSQL behind the same repository contract. |
-| Demo identity | Server-side, process-local sessions with opaque HTTP-only cookies. |
-| Localization | Small English/Hindi/Marathi dictionaries and assistant templates. |
-| Follow-up logic | Explainable demonstration rules; no diagnostic scores or predictive model. |
-
-## Storage behavior and time-box boundary
-
-The walkthrough defaults to `DATA_MODE=demo` and runs without PostgreSQL or AI credentials. Demo mutations are process-local on the server and browser-local for the reactive client demo; they are not a production persistence service. The `/offline` screen is a queue-status demonstration only: entries are not uploaded, and its sync controls do not provide offline data synchronization.
-
-`DATA_MODE=postgres` uses Prisma for selected API reads and writes and does not silently fall back when the database is unavailable. Several existing features are explicitly unavailable in this mode. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for endpoint coverage and limitations.
-
-The supported initial demo runs in one local Node.js process. A serverless/multi-instance deployment is not a reliable home for this memory-backed store or its sessions. PostgreSQL storage alone does not make the application production-ready.
-
-## Documentation
-
-| File | Contents |
-| --- | --- |
-| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Minute-by-minute build order, mandatory demo scope, acceptance checks, and deferrals. |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Components, role boundaries, storage modes, localization, flags, and assistant grounding. |
-| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Proposed relational model, constraints, seed data, and repository parity. |
-| [SECURITY.md](SECURITY.md) | Demo limitations, proposed controls, verification checklist, and production gaps. |
-| [API_DOCUMENTATION.md](API_DOCUMENTATION.md) | Planned request/response contracts, authorization, validation, and error behavior. |
-| [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) | Implemented Postgres routes, migrations, analytics definitions, forecasting, and remaining limits. |
+The existing PostgreSQL database and its records are **not** imported into SQLite by changing `DATA_MODE`. PostgreSQL migration history is retained under `prisma/postgresql-migrations-legacy/` for reference. Keep PostgreSQL backups until you have independently verified any needed export/import.
 
 ## Local setup
 
 Install Node.js 20.19 or later, then run:
 
-1. `npm install`
-2. Copy `.env.example` to `.env` and set a strong `AUTH_SECRET`.
-3. `npm run dev`
+```sh
+npm install
+cp .env.example .env
+# Set a strong AUTH_SECRET in .env
+npm run db:generate
+npm run db:migrate:deploy
+npm run dev
+```
 
-Validate the application with `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`. PostgreSQL schema validation requires `DATABASE_URL` to be set.
+The checked-in SQLite migration creates a fresh database. The repository has no seed or user-provisioning workflow; database accounts and centers must be provisioned through a controlled process before SQLite login is usable.
 
-### Docker demo deployment
+Validate changes with `npm run db:validate`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.
 
-Set a strong `AUTH_SECRET` in your shell or an ignored `.env` file, then start the self-contained demo image:
+### SQLite backup and restore
+
+Stop the application before copying the default database file:
+
+```sh
+cp prisma/dev.db prisma/dev.db.backup
+```
+
+To restore, stop the app, preserve the current file, then copy the verified backup back to `prisma/dev.db`. For active deployments, use a SQLite-aware online backup mechanism and regularly test restores. SQLite database files are local application data and are ignored by Git.
+
+### Docker
+
+Set a strong `AUTH_SECRET` in the environment or ignored `.env` file, then:
 
 ```sh
 docker compose up --build app
 ```
 
-The liveness endpoint is available at `/api/health`. `docker compose --profile postgres up -d postgres` starts PostgreSQL for migration and local development. Configure `DATA_MODE=postgres` and a server-side `DATABASE_URL` before starting the app in database mode. Do not use demo credentials or weak secrets in production.
+Compose mounts a named volume at `/app/data` and configures `DATABASE_URL=file:/app/data/balsathi.db`. The standalone container startup applies pending Prisma migrations before serving requests. The liveness endpoint is `/api/health`; `/api/health/ready` checks SQLite connectivity.
 
-### Offline installation
+## Forecasting
 
-The application now includes an installable web manifest and a privacy-preserving service worker. It caches only the public application shell and never caches API responses or child-record pages. Approved offline operations remain visible in the in-app sync queue; do not treat browser storage as a substitute for durable server synchronization.
+The forecast API and admin chart use aggregate monthly observation counts. They do not expose child identifiers. Generating predictions is an explicit admin action. A prediction is rejected if the model artifact/evaluation is missing, untrusted, or the database history is insufficient. No synthetic data should be presented as real predictive validation. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for export, training, and validation details.
 
-### Configuration
+## Documentation
 
-Copy `.env.example` to an ignored `.env` file for local development. Supply production values through your deployment secret manager:
-
-| Variable | Planned behavior |
+| File | Contents |
 | --- | --- |
-| `DATA_MODE` | `demo` by default; `postgres` uses the Prisma-backed routes documented in the architecture status. |
-| `APP_ORIGIN` | Trusted browser origin; local default `http://localhost:3000`. |
-| `DATABASE_URL` | Server-only PostgreSQL connection string, required only in PostgreSQL mode. Supply through an ignored local environment file or secret store; no value is included here. |
-
-No external AI API key is required for the rule-based demo assistant. `AUTH_SECRET` must be set to a strong secret in production; the built-in development fallback is rejected in production. Session tokens must never be logged.
+| [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Original build plan and subsequent implementation notes. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Components, authorization, and storage modes. |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Current Prisma schema and constraints. |
+| [SECURITY.md](SECURITY.md) | Data-use limits, implemented controls, and remaining gaps. |
+| [API_DOCUMENTATION.md](API_DOCUMENTATION.md) | Request/response contracts and authorization. |
+| [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) | SQLite operations, forecast workflow, and verification. |
+| [AUDIT_AND_FIX_REPORT.md](AUDIT_AND_FIX_REPORT.md) | Audit history and current verification evidence. |
 
 ## Remaining production work
 
-Recommendation, messaging, uploads, and chatbot data still require PostgreSQL repository implementations. Provisioning, password reset, session revocation, retention/deletion, backups, clinically reviewed content, real-time multi-user transport, and a hardened deployment also remain necessary before production use.
-
-PostgreSQL mode does not automatically seed demo users or child records. Provision database accounts, centers, and milestone definitions before login. Unsupported subsystems are called out in the architecture status document.
-
-## Verification status
-
-Verification claims are maintained in [AUDIT_AND_FIX_REPORT.md](AUDIT_AND_FIX_REPORT.md). A passing schema validation only checks Prisma schema syntax; it does not connect to PostgreSQL or prove database workflows work.
+SQLite mode supports the tested child, observation, authentication, scoping, and forecast-history flows. Recommendation, messaging, uploads, and chatbot persistence are not all implemented against the database. User provisioning, password reset/revocation, retention/deletion, backup/restore operations, multi-instance deployment, clinical review, and privacy/security review remain necessary before real-world use.

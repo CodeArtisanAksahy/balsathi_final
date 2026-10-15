@@ -3,6 +3,8 @@
 **Audit date:** 15 October 2026
 **Scope:** repository documentation, build/start configuration, authentication and authorization paths, dashboard/API behavior, uploads, offline queue, selected PostgreSQL/forecast code, dependency configuration, and available automated checks.
 
+> **Latest status — SQLite migration completed 15 October 2026:** The active Prisma datasource and migration history now target SQLite. The PostgreSQL migration files remain preserved under `prisma/postgresql-migrations-legacy/`; the original local PostgreSQL database was not modified by this conversion. Read-only inspection confirmed 21 existing public tables and zero rows in `Center`, `User`, `Child`, and `Observation`, so no application records from those core tables required import. SQLite migrations and an isolated SQLite CRUD/auth integration test passed. See the dated section at the end for this phase's exact results. Earlier PostgreSQL status entries below are historical and have been superseded where they conflict with this update.
+
 ## Executive summary
 
 The project builds and runs in demo mode. PostgreSQL support remains partial and could not be exercised against a live database in this environment. Source and documentation were inconsistent about production status, offline sync, authentication, and system-health measurements. This audit fixed confirmed issues and added smoke/regression tests, but it is not a production-readiness or security certification.
@@ -157,3 +159,40 @@ Only `AUDIT_AND_FIX_REPORT.md` was updated. No PostgreSQL software, service conf
 2. Configure `TEST_API_BASE_URL` and `TEST_FORECAST_ADMIN_USER_ID` in the ignored local environment when a suitable test admin exists, then run the read-only integration mode of `npm run test:postgres-integration`.
 3. For a direct `psql` shell check, safely export only for the command with an environment-file-aware tool, or run `node --env-file=.env` with Prisma as done above. Do not paste credentials into terminal history.
 4. Keep PostgreSQL 16 service and existing data directory unchanged; no install/start step is needed on this Mac.
+
+## PostgreSQL to SQLite migration — 15 October 2026
+
+### Migration decisions
+
+- Changed the active Prisma connector to SQLite and created `prisma/migrations/20261015000000_init_sqlite/migration.sql`. Moved the original PostgreSQL migrations without editing them into `prisma/postgresql-migrations-legacy/` and set the active migration provider to `sqlite`.
+- Changed local `.env` to `DATA_MODE=sqlite` and `DATABASE_URL="file:./dev.db"`; `.env` remains ignored. Added database-file patterns to `.gitignore`, and did not stage either `prisma/dev.db` or the temporary `prisma/test.db`.
+- Changed the service module and Prisma-backed routes to database-neutral naming, removed PostgreSQL-only filtering/raw aggregation, and used Prisma queries for monthly counts and JSON scope handling. SQLite stores enum-like values as strings and structured lists as JSON; route validation continues to enforce domain values.
+- Removed the stale `db:seed` package configuration because its referenced `prisma/seed.ts` does not exist; no synthetic user or child seed data was introduced.
+- Updated docs, `.env.example`, SQLite integration test instructions, and Docker Compose to use a local SQLite file and persistent volume. No automatic PostgreSQL record migration was needed for core app tables: read-only checks found zero rows in `Center`, `User`, `Child`, and `Observation`. The PostgreSQL database, service, and legacy migrations remain intact.
+- Offline browser queue behavior remains separate from server-side SQLite persistence. No ML artifact was retrained or accepted; the API rejects the existing artifact/evaluation provenance and does not fabricate forecasts.
+
+### Verification performed
+
+| Check | Result |
+| --- | --- |
+| `npx prisma migrate deploy` against `file:./test.db` | PASS — one SQLite migration applied. Plain invocation first returned a blank Prisma schema-engine error; retry with `RUST_LOG=trace` succeeded. |
+| `npx prisma migrate status` against `prisma/dev.db` | PASS — schema is up to date. |
+| `npm run db:validate` | PASS — SQLite Prisma schema valid. |
+| `npm run typecheck` | PASS. |
+| `npm test` | PASS — 11 Node tests and 16 Vitest tests. |
+| `npm run test:sqlite-integration` against an isolated empty `prisma/test.db` and running local API | PASS — login/session refresh, account role/disable change, unauthorized request, center/parent scoping, persisted observation create/readback, idempotent retry, stale update rejection, invalid input rejection, readiness, and no prediction on rejected artifact. Temporary fixtures were cleaned. |
+| `python3 -m pytest -q ml/tests` | PASS — 68 passed, 2 skipped. |
+| `npm run lint` | PASS — 0 errors, 63 warnings (unused symbols). |
+| `npm run build` | PASS — Next.js production build completed. |
+| `npm run test:e2e` | PASS — 2/2 Playwright smoke checks passed in SQLite mode. |
+| Existing PostgreSQL data check | PASS/read-only — PostgreSQL 16 remained accepting connections; 21 public tables exist; `Center`, `User`, `Child`, and `Observation` each contain 0 rows. No PostgreSQL writes were performed in this migration phase. |
+| `docker build -t balsathi-ai-sqlite:verify .` | BLOCKED — Docker CLI is installed, but its daemon is not running. The image startup/migration path was not verified in a built container. |
+
+### Remaining limitations
+
+- The database integration harness verifies API persistence from a separate Node test process while the app is running. A full packaged Docker image startup, explicit stop/restart persistence scenario, and restore drill were not run.
+- User/center provisioning is not implemented. The old seed entry referenced a missing script and was removed rather than introducing unrequested synthetic records.
+- Some messaging, uploads, recommendations, chatbot data, and other screens are not fully persisted through SQLite. SQLite requires a single app instance with persistent local disk.
+- 63 lint warnings remain; they are warnings for unused symbols, with no lint errors.
+- PostgreSQL core-table counts were empty, but no general-purpose record migration/import tool was added. If other PostgreSQL tables contain records that must be preserved, export/import and reconciliation must be scoped separately before retiring that database.
+- No real-data model artifact was trained or verified. No real predictive accuracy claim is made.

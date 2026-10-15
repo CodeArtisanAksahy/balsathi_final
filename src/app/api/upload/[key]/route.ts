@@ -14,7 +14,7 @@ export async function GET(
 ): Promise<Response> {
   try {
     const session = await getActorFromSession();
-    if (config.dataMode === "postgres") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for PostgreSQL mode.");
+    if (config.dataMode === "sqlite") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for SQLite mode.");
     requirePermission(session.role, "children:read");
     const { key } = await context.params;
     if (!key) return new Response("Not found", { status: 404 });

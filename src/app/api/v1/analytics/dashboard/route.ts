@@ -1,6 +1,6 @@
 import { errorResponse, jsonResponse } from "@/lib/api";
 import { getActorFromSession, requirePermission } from "@/lib/authorization";
-import { databaseAnalytics, requirePostgresMode } from "@/lib/postgres-service";
+import { databaseAnalytics, requireDatabaseMode } from "@/lib/database-service";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ const querySchema = z.object({ from: z.iso.datetime().optional(), to: z.iso.date
 
 export async function GET(request: Request) {
   try {
-    requirePostgresMode();
+    requireDatabaseMode();
     const session = await getActorFromSession();
     requirePermission(session.role, "children:read");
     const query = querySchema.parse(Object.fromEntries(new URL(request.url).searchParams));

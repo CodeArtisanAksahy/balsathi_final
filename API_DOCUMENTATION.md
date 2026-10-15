@@ -1,12 +1,12 @@
-# Balsathi AI — Proposed MVP API
+# Balsathi AI — API Reference and Planned Contracts
 
 ## Status and conventions
 
-These are planned Next.js App Router route handlers. They are not implemented in this documentation-only repository. Base path: `/api`. Runtime: Node.js. Browser calls are same-origin and use an HTTP-only demo-session cookie.
+This file retains the original MVP contract for context; the current implementation includes additional routes described in the source tree and [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md). Base path: `/api`. Runtime: Node.js. Browser calls are same-origin and use an HTTP-only session cookie.
 
 - JSON requests/responses; field names and enum values are stable across locales.
 - Successful responses use `{ "data": ..., "meta": ... }`.
-- `meta` contains `authMode: "demo"` and `storageMode: "demo" | "postgres"`. PostgreSQL remains a conditional target, not a claim of implemented support.
+- `meta` contains authentication and storage mode information; storage mode is `demo` or `sqlite`.
 - Errors use `{ "error": { "code": "...", "message": "...", "fields": {} } }`; `fields` is optional. UI translates stable error codes rather than relying on English server messages.
 - IDs are UUID strings. Dates use `YYYY-MM-DD`; timestamps use UTC ISO 8601.
 - Protected responses include `Cache-Control: no-store`. Do not cache session or child records publicly.
@@ -178,7 +178,7 @@ This route uses no external model, tool calls, vector database, or persisted cha
 | `415` | `UNSUPPORTED_MEDIA_TYPE` | Body is not JSON. |
 | `422` | `VALIDATION_ERROR` | Invalid field, date, enum, locale, demo key, or body UUID. |
 | `500` | `INTERNAL_ERROR` | Generic unexpected failure; no sensitive details. |
-| `503` | `STORAGE_UNAVAILABLE` | Explicit PostgreSQL mode cannot operate; do not silently switch data sources. |
+| `503` | `STORAGE_UNAVAILABLE` | Configured SQLite storage cannot operate; do not silently switch data sources. |
 
 Example:
 
@@ -192,4 +192,4 @@ Example:
 }
 ```
 
-Cookie authorization, relationship scoping, origin checks, validation, and safe rendering apply equally to the demo repository and the future PostgreSQL adapter. See [SECURITY.md](SECURITY.md).
+Cookie authorization, relationship scoping, validation, and safe rendering apply to supported storage paths. See [SECURITY.md](SECURITY.md).

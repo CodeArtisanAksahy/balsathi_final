@@ -12,7 +12,7 @@ const payload = {
   history: [{ month: "2025-01", count: 11 }, { month: "2025-02", count: 12 }],
   forecasts: [{
     id: "prediction-1", modelVersion: "aggregate-observation-volume-v1", predictionType: "aggregate_monthly_observation_volume",
-    predictionValue: { predicted_count: 15, month: "2025-03", model_version: "aggregate-observation-volume-v1", input_data_cutoff: "2025-02", training_data_cutoff: "2024-12", data_source: "postgresql_aggregate_export", confidence: null, note: "Aggregate workload only" },
+    predictionValue: { predicted_count: 15, month: "2025-03", model_version: "aggregate-observation-volume-v1", input_data_cutoff: "2025-02", training_data_cutoff: "2024-12", data_source: "sqlite_aggregate_export", confidence: null, note: "Aggregate workload only" },
     generatedAt: "2025-03-01T00:00:00.000Z", inputDataCutoff: "2025-02-28T00:00:00.000Z", explanation: {},
   }],
   evaluation: { trained_at: "2025-01-01T00:00:00.000Z", data_cutoff: "2024-12", metrics: { test_start: "2024-10", test_end: "2024-12", candidate_mae: 1.2, candidate_rmse: 1.5 } },
@@ -25,7 +25,7 @@ describe("admin forecast dashboard", () => {
     const selected = [{ riskData: [] }, [], [], []];
     let index = 0;
     useStoreSelector.mockImplementation(() => selected[index++ % selected.length]);
-    getConfiguredDataMode.mockResolvedValue("postgres");
+    getConfiguredDataMode.mockResolvedValue("sqlite");
     apiFetch.mockResolvedValue(payload);
   });
 

@@ -5,10 +5,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATA_MODE: ${DATA_MODE:-demo}
+      DATA_MODE: ${DATA_MODE:-sqlite}
       APP_ORIGIN: http://localhost:3000
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in your environment or .env file}
-      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/balsathi.db}
+      RUN_DB_MIGRATIONS: ${RUN_DB_MIGRATIONS:-true}
       ML_MODEL_PATH: ${ML_MODEL_PATH:-}
       ML_EVALUATION_PATH: ${ML_EVALUATION_PATH:-}
       PYTHON_BIN: ${PYTHON_BIN:-python3}
@@ -18,23 +19,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-
-  postgres:
-    image: postgres:16-alpine
-    profiles: ["postgres"]
-    environment:
-      POSTGRES_DB: balsathi
-      POSTGRES_USER: balsathi
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your environment or .env file}
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U balsathi -d balsathi"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - balsathi-data:/app/data
 
 volumes:
-  postgres-data:
+  balsathi-data:

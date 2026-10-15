@@ -55,7 +55,7 @@ export function ObservationForm({
         observedAt: new Date(form.observedAt).toISOString(),
         attachmentIds: [],
       };
-      const saved = await getConfiguredDataMode() === "postgres"
+      const saved = await getConfiguredDataMode() === "sqlite"
         ? await apiFetch<{ id: string; childId: string }>("/api/observations", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify(payload) })
         : storeActions.addObservation(session, payload).observation;
       toast.success("Observation saved successfully.");

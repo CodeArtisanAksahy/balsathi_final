@@ -9,6 +9,10 @@ __pycache__/
 .pytest_cache/
 ml/artifacts/
 ml/private-data/
+prisma/*.db
+prisma/*.db-journal
+prisma/*.sqlite
+prisma/*.sqlite-journal
 
 # Local configuration and uploads
 .env

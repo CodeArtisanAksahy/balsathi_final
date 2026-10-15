@@ -49,7 +49,7 @@ export function MessagesView({
         subject: "Message",
         body: text,
       };
-      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/messages", { method: "POST", body: JSON.stringify(input) });
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/messages", { method: "POST", body: JSON.stringify(input) });
       else storeActions.addMessage(session, input);
       setText("");
     } catch {

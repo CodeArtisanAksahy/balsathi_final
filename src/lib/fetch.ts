@@ -20,7 +20,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new Error(data.error?.message ?? `Request failed: ${res.status}`);
   }
   const data = await res.json();
-  if (typeof window !== "undefined" && init?.method && init.method !== "GET" && await getConfiguredDataMode() === "postgres") {
+  if (typeof window !== "undefined" && init?.method && init.method !== "GET" && await getConfiguredDataMode() === "sqlite") {
     const bootstrap = await fetch("/api/bootstrap", { cache: "no-store" });
     if (bootstrap.ok) {
       const payload = await bootstrap.json();

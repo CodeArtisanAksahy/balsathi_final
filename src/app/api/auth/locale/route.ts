@@ -6,6 +6,7 @@ import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { appLocales } from "@/lib/domain";
 import { assertSameOrigin } from "@/lib/request-security";
+import type { SessionUser } from "@/lib/domain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function POST(request: Request): Promise<Response> {
     const { locale } = (await readJson(request)) as { locale: string };
     if (!appLocales.includes(locale as (typeof appLocales)[number])) throw new ApiError(400, "INVALID_LOCALE", "Unsupported locale.");
     let updatedUser: Awaited<ReturnType<typeof prisma.user.update>> | null = null;
-    if (config.dataMode === "postgres") {
+    if (config.dataMode === "sqlite") {
       updatedUser = await prisma.user.update({ where: { id: session.id }, data: { preferredLanguage: locale as (typeof appLocales)[number] } });
     } else {
       const data = getDemoStore();
@@ -27,7 +28,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     const token = await createSession({
       ...session,
-      ...(updatedUser ? { name: updatedUser.name, email: updatedUser.email, role: updatedUser.role, centerIds: updatedUser.centerIds } : {}),
+      ...(updatedUser ? { name: updatedUser.name, email: updatedUser.email, role: updatedUser.role as SessionUser["role"], centerIds: Array.isArray(updatedUser.centerIds) ? updatedUser.centerIds.map(String) : [] } : {}),
       preferredLanguage: locale as (typeof appLocales)[number],
       phone: "",
       active: true,

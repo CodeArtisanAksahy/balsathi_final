@@ -4,7 +4,7 @@ import { addObservation, assertChildAccess, getChildProfile } from "@/lib/data";
 import { getDemoStore } from "@/lib/demo-store";
 import { observationCreateSchema, observationReviewSchema } from "@/lib/validation";
 import { config } from "@/lib/config";
-import { createDatabaseObservation, listDatabaseObservations, updateDatabaseObservation } from "@/lib/postgres-service";
+import { createDatabaseObservation, listDatabaseObservations, updateDatabaseObservation } from "@/lib/database-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(request: Request): Promise<Response> {
     requirePermission(session.role, "observations:read");
     const { searchParams } = new URL(request.url);
     const childId = searchParams.get("childId");
-    if (config.dataMode === "postgres") return jsonResponse(await listDatabaseObservations(session, childId ?? undefined));
+    if (config.dataMode === "sqlite") return jsonResponse(await listDatabaseObservations(session, childId ?? undefined));
     const data = getDemoStore();
     let observations = data.observations;
     if (childId) {
@@ -56,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "observations:create");
     const input = observationCreateSchema.parse(await readJson(request));
-    if (config.dataMode === "postgres") return jsonResponse(await createDatabaseObservation(session, input, request.headers.get("idempotency-key")), 201);
+    if (config.dataMode === "sqlite") return jsonResponse(await createDatabaseObservation(session, input, request.headers.get("idempotency-key")), 201);
     const result = addObservation(session, input);
     const profile = getChildProfile(session, input.childId);
     return jsonResponse({ observation: result.observation, assessments: result.assessments, risk: result.risk, profile }, 201);
@@ -70,7 +70,7 @@ export async function PATCH(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "observations:update");
     const input = observationReviewSchema.parse(await readJson(request));
-    if (config.dataMode === "postgres") return jsonResponse({ observation: await updateDatabaseObservation(session, input.id, { reviewStatus: input.reviewStatus }) });
+    if (config.dataMode === "sqlite") return jsonResponse({ observation: await updateDatabaseObservation(session, input.id, { reviewStatus: input.reviewStatus }) });
     const data = getDemoStore();
     const observation = data.observations.find((o) => o.id === input.id);
     if (!observation) return jsonResponse({ error: "OBSERVATION_NOT_FOUND" }, 404);

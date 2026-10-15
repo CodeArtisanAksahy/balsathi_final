@@ -37,7 +37,7 @@ const demoRoles: DemoRole[] = [
   },
 ];
 
-export function LoginForm({ dataMode }: { dataMode: "demo" | "postgres" }) {
+export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

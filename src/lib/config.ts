@@ -1,6 +1,6 @@
 import type { AppLocale } from "./domain";
 
-export type DataMode = "demo" | "postgres";
+export type DataMode = "demo" | "sqlite";
 
 const developmentAuthSecret = "balsathi-dev-only-secret-change-me";
 
@@ -25,7 +25,7 @@ function envBool(name: string, fallback: boolean): boolean {
 export const config = {
   dataMode: env("DATA_MODE", "demo") as DataMode,
   appOrigin: env("APP_ORIGIN", "http://localhost:3000"),
-  databaseUrl: env("DATABASE_URL", ""),
+  databaseUrl: env("DATABASE_URL", "file:./dev.db"),
   authSecret: env("AUTH_SECRET", developmentAuthSecret),
   sessionCookie: env("SESSION_COOKIE", "balsathi_session"),
   sessionTtlHours: envNumber("SESSION_TTL_HOURS", 12),
@@ -70,8 +70,8 @@ export function assertSecureAuthConfiguration(): void {
   }
 }
 
-export function isPostgresMode(): boolean {
-  return config.dataMode === "postgres";
+export function isDatabaseMode(): boolean {
+  return config.dataMode === "sqlite";
 }
 
 export function isDemoMode(): boolean {

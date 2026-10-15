@@ -8,17 +8,19 @@ import {
 import type { SessionUser, AppLocale } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
 import { localeLabels } from "@/lib/i18n";
-import { apiFetch } from "@/lib/fetch";
+import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 import { cn } from "@/lib/utils";
 
 export default function AdminSettingsPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
+  const [dataMode, setDataMode] = useState<"demo" | "sqlite">("demo");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const router = useRouter();
 
   useState(() => {
     apiFetch<SessionUser | null>("/api/auth/session").then(setSession);
+    getConfiguredDataMode().then((mode) => setDataMode(mode === "sqlite" ? "sqlite" : "demo"));
   });
 
   if (!session) return null;
@@ -55,18 +57,18 @@ export default function AdminSettingsPage() {
         </div>
         <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-800">
-            <span className="font-medium">Demo Mode Active</span> — All data is stored in-memory and resets on server restart.
-            Set <code className="px-1 bg-amber-100 rounded">DATA_MODE=postgres</code> for persistent storage.
+            <span className="font-medium">{dataMode === "sqlite" ? "SQLite mode active" : "Demo mode active"}</span> — {dataMode === "sqlite" ? "Records are stored in the local SQLite database." : "Demo data is stored in-memory and resets on server restart."}
+            {dataMode === "demo" && <> Set <code className="px-1 bg-amber-100 rounded">DATA_MODE=sqlite</code> to use the local SQLite database.</>}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl border-2 border-forest bg-forest/5">
-            <p className="text-sm font-medium text-forest">Demo (in-memory)</p>
-            <p className="text-xs text-stone-500 mt-0.5">Current mode</p>
+          <div className={`p-3 rounded-xl border-2 ${dataMode === "demo" ? "border-forest bg-forest/5" : "border-stone-200"}`}>
+            <p className={`text-sm font-medium ${dataMode === "demo" ? "text-forest" : "text-stone-500"}`}>Demo (in-memory)</p>
+            <p className="text-xs text-stone-500 mt-0.5">{dataMode === "demo" ? "Current mode" : "Available"}</p>
           </div>
-          <div className="p-3 rounded-xl border border-stone-200 opacity-50">
-            <p className="text-sm font-medium text-stone-500">PostgreSQL</p>
-            <p className="text-xs text-stone-400 mt-0.5">Requires DATABASE_URL</p>
+          <div className={`p-3 rounded-xl border-2 ${dataMode === "sqlite" ? "border-forest bg-forest/5" : "border-stone-200"}`}>
+            <p className={`text-sm font-medium ${dataMode === "sqlite" ? "text-forest" : "text-stone-500"}`}>SQLite</p>
+            <p className="text-xs text-stone-400 mt-0.5">{dataMode === "sqlite" ? "Current mode" : "Requires a writable local database file"}</p>
           </div>
         </div>
       </div>

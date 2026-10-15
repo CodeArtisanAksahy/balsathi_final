@@ -591,17 +591,17 @@ class TestJFrontendIntegration:
         assert "createAggregateObservationForecast" in content
 
     def test_service_rejects_parent_role(self):
-        service = self.REPO_ROOT / "src" / "lib" / "postgres-service.ts"
+        service = self.REPO_ROOT / "src" / "lib" / "database-service.ts"
         content = service.read_text()
         assert "PARENT" in content and "FORBIDDEN" in content
 
     def test_service_errors_when_artifact_not_configured(self):
-        service = self.REPO_ROOT / "src" / "lib" / "postgres-service.ts"
+        service = self.REPO_ROOT / "src" / "lib" / "database-service.ts"
         content = service.read_text()
         assert "MODEL_NOT_CONFIGURED" in content
 
     def test_service_errors_on_inference_failure(self):
-        service = self.REPO_ROOT / "src" / "lib" / "postgres-service.ts"
+        service = self.REPO_ROOT / "src" / "lib" / "database-service.ts"
         content = service.read_text()
         assert "MODEL_INFERENCE_FAILED" in content
 

@@ -9,10 +9,10 @@ test("login page renders and public health endpoint reports liveness", async ({ 
   expect(healthResponse.ok()).toBeTruthy();
   const health = await healthResponse.json();
   expect(health).toMatchObject({ status: "ok" });
-  if (health.mode === "postgres") {
+  if (health.mode === "sqlite") {
     await expect(page.getByText("Quick Demo Login")).toHaveCount(0);
     await expect(page.getByText(/Demo password for all accounts/)).toHaveCount(0);
-    await expect(page.getByText(/PostgreSQL mode/)).toBeVisible();
+    await expect(page.getByText(/SQLite mode/)).toBeVisible();
   }
 });
 

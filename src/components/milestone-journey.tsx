@@ -48,7 +48,7 @@ export function MilestoneJourney({
     setSavingId(milestoneId);
     try {
       const existing = latestAssessmentFor(milestoneId);
-      if (await getConfiguredDataMode() === "postgres") {
+      if (await getConfiguredDataMode() === "sqlite") {
         await apiFetch("/api/milestones", { method: "POST", body: JSON.stringify({ childId, milestoneId, status, notes: existing?.notes ?? "" }) });
       } else if (existing) {
         storeActions.updateMilestoneAssessment(session, existing.id, { status });

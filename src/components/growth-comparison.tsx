@@ -67,7 +67,7 @@ export function GrowthComparison({
     setSaving(true);
     const payload = { childId, measuredAt: new Date(`${measuredAt}T12:00:00`).toISOString(), heightCm: Number(heightCm), weightKg: Number(weightKg), headCircumferenceCm: null, notes: null };
     try {
-      if (await getConfiguredDataMode() === "postgres") await apiFetch("/api/growth", { method: "POST", body: JSON.stringify(payload) });
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/growth", { method: "POST", body: JSON.stringify(payload) });
       else storeActions.addGrowthMeasurement(session, payload);
       toast.success("Growth measurement saved.");
       setMeasuredAt(""); setHeightCm(""); setWeightKg("");

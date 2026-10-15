@@ -1,7 +1,7 @@
 import { errorResponse, jsonResponse, readJson } from "@/lib/api";
 import { getActorFromSession, requirePermission } from "@/lib/authorization";
 import { childCreateSchema } from "@/lib/validation";
-import { createDatabaseChild, listDatabaseChildren, requirePostgresMode } from "@/lib/postgres-service";
+import { createDatabaseChild, listDatabaseChildren, requireDatabaseMode } from "@/lib/database-service";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ const querySchema = z.object({ q: z.string().trim().max(120).optional(), centerI
 
 export async function GET(request: Request) {
   try {
-    requirePostgresMode();
+    requireDatabaseMode();
     const session = await getActorFromSession();
     requirePermission(session.role, "children:read");
     const query = querySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    requirePostgresMode();
+    requireDatabaseMode();
     const session = await getActorFromSession();
     requirePermission(session.role, "children:create");
     const input = childCreateSchema.parse(await readJson(request));

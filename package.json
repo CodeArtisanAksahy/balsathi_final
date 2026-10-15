@@ -15,17 +15,13 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:forecast-integration": "tsx src/scripts/test-forecast-integration.ts",
-    "test:postgres-integration": "tsx --env-file=.env src/scripts/test-postgres-integration.ts",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
-    "db:seed": "tsx prisma/seed.ts",
     "ml:export-forecast-data": "tsx src/scripts/export-forecast-data.ts",
     "ml:train-forecast": "python3 ml/train_model.py",
     "db:migrate:dev": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "test:sqlite-integration": "tsx --env-file=.env src/scripts/test-sqlite-integration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.907.0",
@@ -39,6 +35,7 @@
     "jose": "^6.1.0",
     "lucide-react": "^0.542.0",
     "next": "16.4.0",
+    "prisma": "^6.19.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.65.0",
@@ -60,7 +57,6 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "16.4.0",
     "jsdom": "^27.0.1",
-    "prisma": "^6.19.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

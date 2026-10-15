@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** Dependency readiness. Public response contains only dependency state, never configuration values. */
 export async function GET(): Promise<Response> {
   let database: "ready" | "not_configured" | "unavailable" = "not_configured";
-  if (config.dataMode === "postgres") {
+  if (config.dataMode === "sqlite") {
     if (config.databaseUrl) {
       try {
         let timer: ReturnType<typeof setTimeout> | undefined;

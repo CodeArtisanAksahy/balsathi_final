@@ -25,7 +25,7 @@ def forecast_next_month(history: pd.Series, artifact_path: str) -> dict:
     if nan_lags:
         raise ValueError(f"History contains NaN values at lag positions {nan_lags}; cannot generate a valid prediction.")
     saved = joblib.load(artifact)
-    if saved.get("data_source") not in {"postgresql_aggregate_export", "synthetic_test_only", "unverified"}:
+    if saved.get("data_source") not in {"sqlite_aggregate_export", "synthetic_test_only", "unverified"}:
         raise ValueError("Configured model artifact has an unknown training provenance.")
     if not saved.get("evaluation") or not saved.get("dataset_cutoff"):
         raise ValueError("Configured model artifact is missing evaluation or cutoff metadata.")
