@@ -1,9 +1,11 @@
 import { ZodError } from "zod";
 import { ApiError } from "./authorization";
+import { assertSameOrigin } from "./request-security";
 
 export const MAX_BODY_BYTES = 262_144;
 
 export async function readJson(request: Request): Promise<unknown> {
+  assertSameOrigin(request);
   const contentType = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
   if (contentType !== "application/json") {
     throw new ApiError(415, "JSON_REQUIRED", "Use Content-Type: application/json.");

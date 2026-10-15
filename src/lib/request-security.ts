@@ -9,8 +9,8 @@ globalForLimits.balsathiRateLimits = buckets;
 
 /** Same-origin check for cookie-authenticated state changes. */
 export function assertSameOrigin(request: Request): void {
-  const origin = request.headers.get("origin");
-  if (!origin) return; // non-browser clients may omit Origin; SameSite cookies remain required.
+  const origin = request.headers.get("origin") ?? request.headers.get("referer");
+  if (!origin) throw new ApiError(403, "ORIGIN_REQUIRED", "A same-origin Origin or Referer header is required.");
   let expected: string;
   try { expected = new URL(config.appOrigin).origin; } catch { throw new ApiError(503, "APP_ORIGIN_INVALID", "Application origin is not configured correctly."); }
   let actual: string;

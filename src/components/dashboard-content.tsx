@@ -5,7 +5,6 @@ import {
   Users,
   ClipboardList,
   AlertTriangle,
-  Cloud,
   Mic,
   Camera,
   CheckSquare,
@@ -27,10 +26,9 @@ import { getDashboardData, getChildRisks } from "@/lib/selectors";
 type DashboardData = Awaited<ReturnType<typeof import("@/lib/data").getDashboardData>>;
 
 const statCards = [
-  { key: "totalChildren", label: "Total Children", sub: "Registered", icon: Users, color: "bg-forest/10 text-forest", trend: "+2 this month" },
-  { key: "observationsThisWeek", label: "Observations", sub: "This Week", icon: ClipboardList, color: "bg-purple-100 text-purple-600", trend: "+4 this week" },
-  { key: "followUpChildren", label: "At Risk", sub: "Need Attention", icon: AlertTriangle, color: "bg-amber-100 text-amber-600", trend: "View children" },
-  { key: "pendingSyncCount", label: "Offline Status", sub: "Pending sync", icon: Cloud, color: "bg-blue-100 text-blue-600", trend: "Synced 2 days ago" },
+  { key: "totalChildren", sub: "In your scope", icon: Users, color: "bg-forest/10 text-forest" },
+  { key: "observationsThisWeek", sub: "Recorded this week", icon: ClipboardList, color: "bg-purple-100 text-purple-600" },
+  { key: "followUpChildren", sub: "Children with open follow-ups", icon: AlertTriangle, color: "bg-amber-100 text-amber-600" },
 ];
 
 export function DashboardContent({ session, data: _initialData }: { session: SessionUser; data?: DashboardData }) {
@@ -72,7 +70,7 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statCards.map((card) => {
           const Icon = card.icon;
           const value = isAdmin && card.key === "totalChildren" ? (data as any).totalChildren : (data as any)[card.key] ?? 0;
@@ -85,9 +83,8 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
               </div>
               <div className="mt-3">
                 <div className="text-2xl font-bold text-stone-800">{value}</div>
-                <div className="text-xs text-stone-500">{card.sub}</div>
+              <div className="text-xs text-stone-500">{card.sub}</div>
               </div>
-              <div className="text-[11px] text-forest mt-1.5 font-medium">{card.trend}</div>
             </div>
           );
         })}

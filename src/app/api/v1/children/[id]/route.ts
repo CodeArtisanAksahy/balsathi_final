@@ -3,11 +3,12 @@ import { getActorFromSession, requirePermission } from "@/lib/authorization";
 import { requireDatabaseMode, getDatabaseChildProfile, childScopeWhere } from "@/lib/database-service";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { calendarDateSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const patchSchema = z.object({ fullName: z.string().trim().min(2).max(120).optional(), dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), gender: z.enum(["FEMALE", "MALE", "OTHER", "UNSPECIFIED"]).optional(), primaryLanguage: z.enum(["en", "hi", "mr"]).optional() }).strict();
+const patchSchema = z.object({ fullName: z.string().trim().min(2).max(120).optional(), dateOfBirth: calendarDateSchema.optional(), gender: z.enum(["FEMALE", "MALE", "OTHER", "UNSPECIFIED"]).optional(), primaryLanguage: z.enum(["en", "hi", "mr"]).optional() }).strict();
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try { requireDatabaseMode(); const session = await getActorFromSession(); requirePermission(session.role, "children:read"); const { id } = await params; return jsonResponse(await getDatabaseChildProfile(session, id)); }

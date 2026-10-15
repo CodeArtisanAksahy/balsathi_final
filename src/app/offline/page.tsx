@@ -10,7 +10,6 @@ export default function OfflinePage() {
   const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
   const [queue, setQueue] = useState<SyncQueueItem[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);
@@ -18,8 +17,6 @@ export default function OfflinePage() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     setQueue(getSyncQueue());
-    const saved = localStorage.getItem("balsathi_last_sync");
-    if (saved) queueMicrotask(() => setLastSync(saved));
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -34,13 +31,8 @@ export default function OfflinePage() {
     if (!online) return;
     setSyncing(true);
     try {
-      const result = await syncPendingItems();
+      await syncPendingItems();
       refreshQueue();
-      if (result.success) {
-        const now = new Date().toLocaleString();
-        setLastSync(now);
-        localStorage.setItem("balsathi_last_sync", now);
-      }
     } finally {
       setSyncing(false);
     }
@@ -76,7 +68,7 @@ export default function OfflinePage() {
         </div>
         <button onClick={runSync} disabled={!online || syncing || pendingCount === 0} className="btn-primary">
           {syncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Check queue ({pendingCount})
+          Mark for recovery ({pendingCount})
         </button>
       </div>
 
@@ -87,9 +79,6 @@ export default function OfflinePage() {
         <StatCard icon={AlertCircle} label="Failed" value={failedCount} color="bg-risk-red-light text-risk-red" />
       </div>
 
-      {lastSync && (
-        <p className="text-sm text-stone-500">Last successful sync: {lastSync}</p>
-      )}
 
       {/* Queue */}
       <div className="card p-5">

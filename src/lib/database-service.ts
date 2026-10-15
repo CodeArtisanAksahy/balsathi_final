@@ -180,6 +180,10 @@ export async function updateDatabaseChild(session: SessionUser, id: string, upda
   fullName?: string; dateOfBirth?: string; gender?: "FEMALE" | "MALE" | "OTHER" | "UNSPECIFIED"; primaryLanguage?: AppLocale;
 }, expectedUpdatedAt?: string) {
   if (session.role === "PARENT" || session.role === "WORKER") throw new ApiError(403, "FORBIDDEN", "Your role cannot update child profiles.");
+  if (updates.dateOfBirth) {
+    const dateOfBirth = new Date(`${updates.dateOfBirth}T00:00:00.000Z`);
+    if (!Number.isFinite(dateOfBirth.getTime()) || dateOfBirth > new Date()) throw new ApiError(422, "INVALID_DATE_OF_BIRTH", "Date of birth must be a valid date that is not in the future.");
+  }
   const existing = await prisma.child.findFirst({ where: { id, ...childScopeWhere(session) } });
   if (!existing) throw new ApiError(404, "CHILD_NOT_FOUND", "Child record not found.");
   if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) throw new ApiError(412, "VERSION_CONFLICT", "Child changed; reload before saving.");
@@ -209,11 +213,11 @@ export async function databaseAnalytics(session: SessionUser, from?: Date, to?: 
   const children = await prisma.child.findMany({ where: scope, select: { id: true, dateOfBirth: true, centerId: true } });
   const ids = children.map((child) => child.id);
   const dateWhere = from || to ? { gte: from, lte: to } : undefined;
-  const [observations, assessments, growth, followUps] = await prisma.$transaction([
+  const [observations, assessments, growth, followUpRows] = await prisma.$transaction([
     prisma.observation.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { observedAt: dateWhere } : {}) }, select: { observedAt: true, domain: true, followUpRequired: true } }),
     prisma.milestoneAssessment.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { assessedAt: dateWhere } : {}) }, include: { milestone: { select: { domain: true, active: true, minAgeMonths: true, maxAgeMonths: true } } } }),
     prisma.growthMeasurement.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { measuredAt: dateWhere } : {}) }, orderBy: { measuredAt: "asc" }, select: { childId: true, measuredAt: true, heightCm: true, weightKg: true, verificationStatus: true } }),
-    prisma.followUp.count({ where: { childId: { in: ids }, status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+    prisma.followUp.findMany({ where: { childId: { in: ids }, status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { childId: true } }),
   ]);
   const domains = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"] as const;
   const domainAssessments = domains.map((domain) => {
@@ -223,7 +227,65 @@ export async function databaseAnalytics(session: SessionUser, from?: Date, to?: 
     }));
     return { domain, ...milestoneCompletion(applicable), definition: "Achieved / assessed milestones applicable to age at assessment; NOT_OBSERVED, NOT_ASSESSED and NOT_APPLICABLE are excluded. This is not a clinical development score." };
   });
-  return { childrenCount: children.length, observationCount: observations.length, openFollowUps: followUps, domainAssessments, observationTrends: groupObservationCounts(observations), growthHistory: growth, generatedAt: new Date().toISOString(), filters: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null } };
+  return { childrenCount: children.length, observationCount: observations.length, openFollowUps: new Set(followUpRows.map((row) => row.childId)).size, domainAssessments, observationTrends: groupObservationCounts(observations), growthHistory: growth, generatedAt: new Date().toISOString(), filters: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null } };
+}
+
+export async function databaseDashboard(session: SessionUser) {
+  const children = await prisma.child.findMany({
+    where: childScopeWhere(session),
+    include: {
+      center: true,
+      risks: { where: { reviewRequired: true } },
+      followUps: { where: { status: { in: ["OPEN", "IN_PROGRESS"] } } },
+      guardianLinks: { include: { guardian: { select: { linkedUserId: true } } } },
+    },
+  });
+  const childIds = children.map(({ id }) => id);
+  const centerIds = [...new Set(children.map(({ centerId }) => centerId))];
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [observationsThisWeek, pendingReview, recentObservations, milestoneReviews, centers, workers, auditLogs] = await prisma.$transaction([
+    prisma.observation.count({ where: { childId: { in: childIds }, observedAt: { gte: weekAgo } } }),
+    prisma.observation.count({ where: { childId: { in: childIds }, reviewStatus: "REVIEW_PENDING" } }),
+    prisma.observation.findMany({ where: { childId: { in: childIds } }, include: { child: true }, orderBy: { observedAt: "desc" }, take: 5 }),
+    prisma.milestoneAssessment.findMany({ where: { childId: { in: childIds }, status: { not: "MET" } }, orderBy: { assessedAt: "desc" }, take: 5 }),
+    prisma.center.findMany({ where: session.role === "DISTRICT_ADMIN" ? { active: true } : { id: { in: session.centerIds } } }),
+    prisma.user.findMany({ where: { role: "WORKER", active: true }, select: { id: true, centerIds: true } }),
+    prisma.auditLog.findMany({ where: { scopeCenterId: { in: centerIds } }, orderBy: { createdAt: "desc" }, take: 6 }),
+  ]);
+  const followUpChildIds = new Set(children.filter((child) => child.followUps.length > 0).map(({ id }) => id));
+  const attentionChildren = children.filter((child) => child.followUps.length > 0 || child.risks.length > 0).map((child) => ({
+    child,
+    risks: [
+      ...child.risks,
+      ...child.followUps.map((followUp) => ({ id: followUp.id, childId: child.id, level: followUp.priority === "HIGH" ? "HIGH" : "MODERATE", title: "Follow-up requested", explanation: `Follow-up status: ${followUp.status}`, sourceObservationId: followUp.observationId, sourceMilestoneId: null, reviewRequired: true, createdAt: followUp.createdAt, updatedAt: followUp.updatedAt })),
+    ],
+  }));
+  const domainOverview = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"].map((domain) => ({ domain, count: 0 }));
+  const domainCounts = await prisma.observation.groupBy({ by: ["domain"], where: { childId: { in: childIds } }, _count: { _all: true } });
+  for (const item of domainOverview) item.count = domainCounts.find(({ domain }) => domain === item.domain)?._count._all ?? 0;
+  const parentIds = [...new Set(children.flatMap((child) => child.guardianLinks.map((link) => link.guardian.linkedUserId).filter((id): id is string => Boolean(id))))];
+  const activeParents = parentIds.length ? await prisma.user.count({ where: { id: { in: parentIds }, active: true, role: "PARENT" } }) : 0;
+  const visibleCenterIds = new Set(centers.map(({ id }) => id));
+  const activeWorkers = workers.filter((worker) => Array.isArray(worker.centerIds) && worker.centerIds.some((centerId) => typeof centerId === "string" && visibleCenterIds.has(centerId))).length;
+  const centerStats = centers.map((center) => {
+    const scoped = children.filter((child) => child.centerId === center.id);
+    return { centerName: center.name, totalChildren: scoped.length, followUpChildren: scoped.filter((child) => followUpChildIds.has(child.id) || child.risks.length > 0).length };
+  });
+  return {
+    totalChildren: children.length,
+    followUpChildren: attentionChildren.length,
+    observationsThisWeek,
+    pendingReview,
+    domainOverview,
+    recentObservations,
+    upcomingMilestoneReviews: milestoneReviews,
+    attentionChildren,
+    centerStats,
+    totalCenters: centers.length,
+    activeWorkers,
+    registeredParents: activeParents,
+    auditLogs,
+  };
 }
 
 export async function listDatabaseMessages(session: SessionUser, childId: string) {

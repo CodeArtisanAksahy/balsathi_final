@@ -11,6 +11,7 @@ import {
 
 const name = z.string().trim().min(2).max(120);
 const identifier = z.string().trim().min(1).max(80);
+export const calendarDateSchema = z.iso.date();
 
 export const loginSchema = z.object({
   email: z.email(),
@@ -20,7 +21,7 @@ export const loginSchema = z.object({
 
 export const childCreateSchema = z.object({
   fullName: name,
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateOfBirth: calendarDateSchema,
   gender: z.enum(genders),
   centerId: identifier,
   assignedWorkerId: identifier,

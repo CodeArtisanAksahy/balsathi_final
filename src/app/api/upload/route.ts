@@ -6,6 +6,7 @@ import { attachmentKinds, type AttachmentKind, type AttachmentRecord } from "@/l
 import { uploadFile } from "@/lib/storage";
 import { config } from "@/lib/config";
 import { randomUUID } from "node:crypto";
+import { assertSameOrigin } from "@/lib/request-security";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const allowedMimeTypes = new Set([
@@ -24,6 +25,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    assertSameOrigin(request);
     const session = await getActorFromSession();
     if (config.dataMode === "sqlite") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for SQLite mode.");
     requirePermission(session.role, "observations:create");

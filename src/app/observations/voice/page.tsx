@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Mic, MicOff, Save, Loader2, Play, Pause } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
+import { getConfiguredDataMode } from "@/lib/fetch";
 
 export default function VoiceObservationPage() {
   return <VoiceObservationInner />;
@@ -24,11 +25,13 @@ function VoiceObservationInner() {
   const [activityContext, setActivityContext] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [sqliteMode, setSqliteMode] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    getConfiguredDataMode().then((mode) => setSqliteMode(mode === "sqlite")).catch(() => setError("Application data service is unavailable."));
     Promise.all([
       apiFetch<SessionUser | null>("/api/auth/session"),
       apiFetch<{ items: Array<{ id: string; fullName: string }> }>("/api/children?pageSize=100"),
@@ -52,6 +55,7 @@ function VoiceObservationInner() {
   }, [recording, paused]);
 
   async function startRecording() {
+    if (sqliteMode) { setError("Voice transcription is unavailable in SQLite mode. Enter observation notes below to save a text-based record."); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
@@ -138,6 +142,8 @@ function VoiceObservationInner() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">Voice Observation</h1>
+
+      {sqliteMode && <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">Voice recording and transcription are unavailable in SQLite mode. You can still enter observation notes and save them as a text-based record.</div>}
 
       {error && <div className="rounded-xl bg-risk-red-light text-risk-red text-sm px-4 py-3">{error}</div>}
 

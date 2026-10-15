@@ -191,7 +191,7 @@ export function getDashboardData(state: DemoData, session: SessionUser) {
       const observed = new Date(o.observedAt).getTime();
       return observed >= Date.now() - 1000 * 60 * 60 * 24 * 7;
     }).length,
-    pendingSyncCount: state.observations.filter((o) => o.reviewStatus === "DRAFT").length,
+    pendingReview: observations.filter((o) => o.reviewStatus === "REVIEW_PENDING").length,
     domainOverview,
     recentObservations,
     upcomingMilestoneReviews,

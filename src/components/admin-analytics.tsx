@@ -65,10 +65,10 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
 
   // ── Fetch stored forecasts on mount (SQLite mode only) ─────────────────
   const refreshForecast = useCallback(async (cancelled?: () => boolean) => {
-    const mode = await getConfiguredDataMode();
-    if (mode !== "sqlite") { setForecast({ status: "unavailable" }); return; }
-    setForecast({ status: "loading" });
     try {
+      const mode = await getConfiguredDataMode();
+      if (mode === "demo") { setForecast({ status: "unavailable" }); return; }
+      setForecast({ status: "loading" });
       const data = await apiFetch<ForecastPayload>("/api/v1/analytics/forecast");
       if (!cancelled?.()) setForecast({ status: "ok", data });
     } catch (err) {

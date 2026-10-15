@@ -37,4 +37,10 @@ describe("offline queue behavior", () => {
       error: expect.stringContaining("Automatic sync is unavailable"),
     });
   });
+
+  it("downgrades legacy simulated synced statuses that have no verifiable server receipt", () => {
+    storage.set("balsathi_sync_queue", JSON.stringify([{ id: "legacy", entity: "observation", entityId: "o1", action: "CREATE", payload: {}, status: "SYNCED", retries: 0, error: null, createdAt: new Date().toISOString(), syncedAt: new Date().toISOString() }]));
+    expect(getSyncQueue()[0]).toMatchObject({ status: "FAILED", syncedAt: null, error: expect.stringContaining("cannot be verified") });
+    expect(JSON.parse(storage.get("balsathi_sync_queue")!)[0].status).toBe("FAILED");
+  });
 });

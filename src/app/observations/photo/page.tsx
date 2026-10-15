@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Camera, Upload, X, Save, Loader2 } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
+import { getConfiguredDataMode } from "@/lib/fetch";
 
 export default function PhotoObservationPage() {
   return <PhotoObservationInner />;
@@ -23,10 +24,12 @@ function PhotoObservationInner() {
   const [consentVerified, setConsentVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [sqliteMode, setSqliteMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    getConfiguredDataMode().then((mode) => setSqliteMode(mode === "sqlite")).catch(() => setError("Application data service is unavailable."));
     Promise.all([
       apiFetch<SessionUser | null>("/api/auth/session"),
       apiFetch<{ items: Array<{ id: string; fullName: string }> }>("/api/children?pageSize=100"),
@@ -52,6 +55,7 @@ function PhotoObservationInner() {
   }
 
   async function save() {
+    if (sqliteMode) { setError("Photo uploads are not available in SQLite mode. Use text observation capture instead."); return; }
     if (images.length === 0) { setError("Please add at least one photo."); return; }
     if (!observationText.trim()) { setError("Please describe the observation."); return; }
     setSaving(true);
@@ -99,6 +103,8 @@ function PhotoObservationInner() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">Photo Observation</h1>
+
+      {sqliteMode && <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">Photo uploads are currently unavailable in SQLite mode. Capture the observation as text instead.</div>}
 
       {error && <div className="rounded-xl bg-risk-red-light text-risk-red text-sm px-4 py-3">{error}</div>}
 

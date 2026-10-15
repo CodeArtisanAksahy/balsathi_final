@@ -23,7 +23,19 @@ export function getSyncQueue(): SyncQueueItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const stored = JSON.parse(raw);
+    if (!Array.isArray(stored)) return [];
+    let changed = false;
+    const items = stored.map((item) => {
+      if (item && item.status === "SYNCED") {
+        changed = true;
+        return { ...item, status: "FAILED", syncedAt: null, error: "Previous sync status cannot be verified. The server synchronization feature is unavailable; recover this entry manually." };
+      }
+      return item;
+    });
+    if (changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return items;
   } catch {
     return [];
   }

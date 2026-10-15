@@ -72,18 +72,22 @@ async function main() {
       const token = await sign(id, role, centers);
       return async (path: string, init: RequestInit = {}) => fetch(`${baseUrl!.replace(/\/$/, "")}${path}`, {
         ...init,
-        headers: { cookie: `${config.sessionCookie}=${token}`, ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
+      headers: { cookie: `${config.sessionCookie}=${token}`, origin: baseUrl!, ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
       });
     };
 
     const loginEmail = `worker-${email}`;
     await prisma.user.update({ where: { id: workerId }, data: { email: loginEmail } });
-    const loginResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: loginEmail, password: "Temporary-Integration-Password-1" }) });
+    const loginResponse = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/login`, { method: "POST", headers: { origin: baseUrl, "content-type": "application/json" }, body: JSON.stringify({ email: loginEmail, password: "Temporary-Integration-Password-1" }) });
     assert.equal(loginResponse.status, 200, `SQLite login failed: ${loginResponse.status}`);
     const loginCookie = loginResponse.headers.get("set-cookie")?.split(";")[0];
     assert.ok(loginCookie, "SQLite login did not issue a session cookie.");
     const activeSession = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/session`, { headers: { cookie: loginCookie } });
     assert.equal(activeSession.status, 200);
+    const expiredAt = Math.floor(Date.now() / 1000) - 1;
+    const expiredToken = await new SignJWT({ role: "WORKER", centerIds: [centerId] }).setProtectedHeader({ alg: "HS256" }).setSubject(workerId).setIssuedAt(expiredAt - 60).setExpirationTime(expiredAt).sign(new TextEncoder().encode(config.authSecret));
+    const expiredSession = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/session`, { headers: { cookie: `${config.sessionCookie}=${expiredToken}` } });
+    assert.equal((await expiredSession.json()).data, null, "Expired session was accepted.");
     const changedRole = await prisma.user.update({ where: { id: workerId }, data: { role: "PARENT" } });
     try {
       const roleAfterUpdate = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/children`, { headers: { cookie: loginCookie } });
@@ -92,6 +96,11 @@ async function main() {
     } finally {
       await prisma.user.update({ where: { id: changedRole.id }, data: { role: "WORKER" } });
     }
+    await prisma.user.update({ where: { id: adminId }, data: { centerIds: [] } });
+    const adminToken = await sign(adminId, "CENTER_ADMIN", [centerId]);
+    const changedScope = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/children`, { headers: { cookie: `${config.sessionCookie}=${adminToken}` } });
+    assert.deepEqual((await changedScope.json()).data.items, [], "Database center-scope change did not apply to the existing session.");
+    await prisma.user.update({ where: { id: adminId }, data: { centerIds: [centerId] } });
     const disabledLogin = await prisma.user.update({ where: { id: workerId }, data: { active: false } });
     try {
       const disabledSession = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/session`, { headers: { cookie: loginCookie } });
@@ -99,6 +108,9 @@ async function main() {
     } finally {
       await prisma.user.update({ where: { id: disabledLogin.id }, data: { active: true } });
     }
+    const logout = await fetch(`${baseUrl.replace(/\/$/, "")}/api/auth/logout`, { method: "POST", headers: { origin: baseUrl, cookie: loginCookie } });
+    assert.equal(logout.status, 200, "Logout failed.");
+    assert.match(logout.headers.get("set-cookie") ?? "", /Max-Age=0/i, "Logout did not expire the session cookie.");
     const unauthorized = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/children`);
     assert.equal(unauthorized.status, 401, "Unauthenticated request was not rejected.");
 
@@ -117,7 +129,9 @@ async function main() {
 
     const createPath = `/api/v1/children/${childId}/observations`;
     const idempotencyKey = `it-${suffix}`;
-    const observationBody = { observedAt: new Date(Date.now() - 60_000).toISOString(), method: "TEXT", observationLanguage: "en", domain: "LANGUAGE", activityContext: "Integration test", observationText: "Temporary integration observation.", workerNotes: "", followUpRequired: false, reviewStatus: "REVIEW_PENDING", attachmentIds: [], milestoneAssessments: [{ milestoneId, status: "MET", notes: "Test" }] };
+    const observationBody = { observedAt: new Date(Date.now() - 60_000).toISOString(), method: "TEXT", observationLanguage: "en", domain: "LANGUAGE", activityContext: "Integration test", observationText: "Temporary integration observation.", workerNotes: "", followUpRequired: true, reviewStatus: "REVIEW_PENDING", attachmentIds: [], milestoneAssessments: [{ milestoneId, status: "MET", notes: "Test" }] };
+    const crossOriginMutation = await workerRequest(createPath, { method: "POST", headers: { origin: "https://attacker.invalid" }, body: JSON.stringify(observationBody) });
+    assert.equal(crossOriginMutation.status, 403, "Cross-origin mutation was not rejected.");
     const created = await workerRequest(createPath, { method: "POST", headers: { "idempotency-key": idempotencyKey }, body: JSON.stringify(observationBody) });
     assert.equal(created.status, 201, `Observation create failed: ${created.status} ${JSON.stringify(await created.clone().json())}`);
     const createdBody = await created.json();
@@ -128,6 +142,15 @@ async function main() {
     const readBack = await workerRequest(`/api/v1/children/${childId}`);
     assert.equal(readBack.status, 200, "Persisted child profile could not be read back.");
     assert.equal((await readBack.json()).data.observations[0].id, createdBody.data.id);
+    const bootstrap = await adminRequest("/api/bootstrap");
+    const snapshot = (await bootstrap.json()).data.state;
+    assert.ok(snapshot.riskAssessments.some((risk: { childId: string; reviewRequired: boolean }) => risk.childId === childId && risk.reviewRequired), "Persisted follow-up was missing from the authorized dashboard bootstrap.");
+    const dashboard = await adminRequest("/api/dashboard");
+    const dashboardData = (await dashboard.json()).data;
+    assert.equal(dashboardData.totalChildren, 1);
+    assert.equal(dashboardData.followUpChildren, 1);
+    assert.equal(dashboardData.observationsThisWeek, 1);
+    assert.equal(dashboardData.pendingReview, 1);
     const stale = await workerRequest(`/api/v1/children/${childId}/observations`, { method: "PATCH", headers: { "if-match": "2000-01-01T00:00:00.000Z" }, body: JSON.stringify({ observationId: createdBody.data.id, observationText: "Updated integration observation" }) });
     assert.equal(stale.status, 412, "Stale observation update did not report a version conflict.");
     const invalid = await workerRequest(`/api/v1/children/${childId}/observations`, { method: "POST", body: JSON.stringify({ ...observationBody, observedAt: "not-a-date" }) });
@@ -135,12 +158,12 @@ async function main() {
 
     const ready = await fetch(`${baseUrl.replace(/\/$/, "")}/api/health/ready`);
     assert.equal(ready.status, 200, "Readiness endpoint did not report available SQLite.");
-    const forecast = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/analytics/forecast`, { method: "POST", headers: { cookie: `${config.sessionCookie}=${await sign(adminId, "CENTER_ADMIN", [centerId])}` } });
+    const forecast = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/analytics/forecast`, { method: "POST", headers: { origin: baseUrl, cookie: `${config.sessionCookie}=${await sign(adminId, "CENTER_ADMIN", [centerId])}` } });
     assert.equal(forecast.status, 503, "Forecast should fail without a real evaluated artifact.");
     const forecastError = await forecast.json();
     assert.ok(["MODEL_NOT_CONFIGURED", "MODEL_ARTIFACT_MISSING", "MODEL_EVALUATION_INVALID", "INSUFFICIENT_HISTORY"].includes(forecastError.error?.code), `Unexpected forecast failure: ${forecastError.error?.code}`);
 
-    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", center_isolation: "verified", parent_link_scope: "verified", observation_create_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
+    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", expired_session: "rejected", logout: "verified", role_and_center_scope_refresh: "verified", disabled_account: "rejected", same_origin: "verified", center_isolation: "verified", parent_link_scope: "verified", observation_create_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
   } finally {
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.deleteMany({ where: { entityId: { contains: suffix } } });

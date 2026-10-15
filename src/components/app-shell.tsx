@@ -31,7 +31,7 @@ export function AppShell({ session, children }: { session: SessionUser | null; c
     if (!session || isPublic) return;
     let cancelled = false;
     void getConfiguredDataMode().then(async (mode) => {
-      if (mode !== "sqlite") { setStoreReady(true); return; }
+      if (mode === "demo") { setStoreReady(true); return; }
       const response = await fetch("/api/bootstrap", { cache: "no-store" });
       if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.error?.message ?? "Unable to load database records."); }
       if (cancelled) return;

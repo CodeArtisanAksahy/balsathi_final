@@ -8,6 +8,10 @@ describe("request security", () => {
     expect(() => assertSameOrigin(new Request("http://localhost", { headers: { origin: "https://attacker.example" } }))).toThrowError(ApiError);
   });
 
+  it("rejects state-changing requests without an origin or referer", () => {
+    expect(() => assertSameOrigin(new Request("http://localhost"))).toThrowError(ApiError);
+  });
+
   it("limits repeated requests per keyed client bucket", () => {
     const key = `test-${Date.now()}`;
     const request = () => new Request("http://localhost", { headers: { "x-forwarded-for": "192.0.2.1" } });

@@ -5,7 +5,14 @@ import type { DemoData } from "@/lib/domain";
 
 let modePromise: Promise<string> | undefined;
 export function getConfiguredDataMode(): Promise<string> {
-  modePromise ??= fetch("/api/health", { cache: "no-store" }).then((res) => res.json()).then((data) => String(data.mode ?? "demo")).catch(() => "demo");
+  if (!modePromise) modePromise = fetch("/api/health", { cache: "no-store" }).then((res) => {
+    if (!res.ok) throw new Error(`Unable to determine storage mode (${res.status}).`);
+    return res.json();
+  }).then((data) => {
+    const mode = String(data.mode ?? "");
+    if (mode !== "demo" && mode !== "sqlite") throw new Error("Application storage mode is invalid.");
+    return mode;
+  }).catch((error) => { modePromise = undefined; throw error; });
   return modePromise;
 }
 
@@ -20,7 +27,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new Error(data.error?.message ?? `Request failed: ${res.status}`);
   }
   const data = await res.json();
-  if (typeof window !== "undefined" && init?.method && init.method !== "GET" && await getConfiguredDataMode() === "sqlite") {
+  if (typeof window !== "undefined" && init?.method && init.method !== "GET" && res.headers.get("X-Balsathi-Mode") === "sqlite") {
     const bootstrap = await fetch("/api/bootstrap", { cache: "no-store" });
     if (bootstrap.ok) {
       const payload = await bootstrap.json();

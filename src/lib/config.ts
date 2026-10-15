@@ -9,6 +9,12 @@ function env(name: string, fallback: string): string {
   return value === undefined || value === "" ? fallback : value;
 }
 
+function dataMode(): DataMode {
+  const value = env("DATA_MODE", "demo");
+  if (value === "demo" || value === "sqlite") return value;
+  throw new Error(`Unsupported DATA_MODE "${value}". Use "demo" or "sqlite".`);
+}
+
 function envNumber(name: string, fallback: number): number {
   const value = process.env[name];
   if (value === undefined || value === "") return fallback;
@@ -23,7 +29,7 @@ function envBool(name: string, fallback: boolean): boolean {
 }
 
 export const config = {
-  dataMode: env("DATA_MODE", "demo") as DataMode,
+  dataMode: dataMode(),
   appOrigin: env("APP_ORIGIN", "http://localhost:3000"),
   databaseUrl: env("DATABASE_URL", "file:./dev.db"),
   authSecret: env("AUTH_SECRET", developmentAuthSecret),
@@ -65,8 +71,8 @@ export const config = {
 };
 
 export function assertSecureAuthConfiguration(): void {
-  if (config.isProduction && config.authSecret === developmentAuthSecret) {
-    throw new Error("AUTH_SECRET must be configured in production.");
+  if (config.isProduction && (config.authSecret === developmentAuthSecret || config.authSecret.length < 32 || config.authSecret === "change-me-to-a-long-random-secret" || config.authSecret.startsWith("replace-with-"))) {
+    throw new Error("AUTH_SECRET must be a unique secret of at least 32 characters in production.");
   }
 }
 

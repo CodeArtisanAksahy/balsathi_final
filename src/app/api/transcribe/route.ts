@@ -3,6 +3,7 @@ import { getActorFromSession } from "@/lib/authorization";
 import { config } from "@/lib/config";
 import { appendAudit, getDemoStore, newId } from "@/lib/demo-store";
 import { ApiError } from "@/lib/authorization";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request): Promise<Response> {
   try {
+    assertSameOrigin(request);
     const session = await getActorFromSession();
     if (config.dataMode === "sqlite") throw new ApiError(501, "TRANSCRIPTION_NOT_CONFIGURED", "A production transcription provider and database audit path are not configured.");
     const formData = await request.formData();
