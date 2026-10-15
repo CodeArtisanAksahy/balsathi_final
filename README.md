@@ -1,6 +1,6 @@
 # Balsathi AI
 
-**Functional demo MVP.** This repository contains a Next.js application, API routes, synthetic demo data, and a Prisma schema for the planned PostgreSQL persistence layer.
+**Demo and incomplete PostgreSQL implementation.** This repository contains a Next.js application, demo fixtures, selected Prisma-backed routes, and an aggregate forecast workflow. PostgreSQL support is partial and is not production-ready.
 
 Balsathi AI is planned as a small child-development record demonstration for workers, parents, and administrators, with English, Hindi, and Marathi UI and a record-grounded demo assistant.
 
@@ -8,7 +8,7 @@ Balsathi AI is planned as a small child-development record demonstration for wor
 
 ## Planned MVP experience
 
-- Select an allowlisted demo worker, parent, or administrator and receive a short-lived HTTP-only session cookie.
+- Sign in as a provisioned PostgreSQL user or select an allowlisted demo worker, parent, or administrator and receive an HTTP-only session cookie.
 - View seeded child records appropriate to that identity.
 - As an assigned worker, add a dated observation and record a sample milestone result.
 - See transparent follow-up flags linked to their underlying observation or milestone result.
@@ -32,9 +32,9 @@ The assistant is a **local template-based demo**, not an external LLM or unrestr
 
 ## Storage behavior and time-box boundary
 
-The walkthrough defaults to `DATA_MODE=demo` and runs without PostgreSQL or AI credentials. Demo mutations are process-local on the server and browser-local for the reactive client demo; they are not a production persistence service.
+The walkthrough defaults to `DATA_MODE=demo` and runs without PostgreSQL or AI credentials. Demo mutations are process-local on the server and browser-local for the reactive client demo; they are not a production persistence service. The `/offline` screen is a queue-status demonstration only: entries are not uploaded, and its sync controls do not provide offline data synchronization.
 
-`DATA_MODE=postgres` uses Prisma for supported API reads and writes and does not silently fall back when the database is unavailable. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for migration steps, endpoint coverage, and current limitations.
+`DATA_MODE=postgres` uses Prisma for selected API reads and writes and does not silently fall back when the database is unavailable. Several existing features are explicitly unavailable in this mode. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for endpoint coverage and limitations.
 
 The supported initial demo runs in one local Node.js process. A serverless/multi-instance deployment is not a reliable home for this memory-backed store or its sessions. PostgreSQL storage alone does not make the application production-ready.
 
@@ -83,7 +83,7 @@ Copy `.env.example` to an ignored `.env` file for local development. Supply prod
 | `APP_ORIGIN` | Trusted browser origin; local default `http://localhost:3000`. |
 | `DATABASE_URL` | Server-only PostgreSQL connection string, required only in PostgreSQL mode. Supply through an ignored local environment file or secret store; no value is included here. |
 
-No external AI API key or session-signing secret is required for the proposed in-memory opaque-session demo. Session tokens are generated at runtime and must never be logged.
+No external AI API key is required for the rule-based demo assistant. `AUTH_SECRET` must be set to a strong secret in production; the built-in development fallback is rejected in production. Session tokens must never be logged.
 
 ## Remaining production work
 
@@ -93,4 +93,4 @@ PostgreSQL mode does not automatically seed demo users or child records. Provisi
 
 ## Verification status
 
-Verified locally: TypeScript typecheck, lint (with no errors), the seeded-data test suite, the production build, and Prisma schema validation all pass. Schema validation requires a configured `DATABASE_URL`; it does not connect to the database.
+Verification claims are maintained in [AUDIT_AND_FIX_REPORT.md](AUDIT_AND_FIX_REPORT.md). A passing schema validation only checks Prisma schema syntax; it does not connect to PostgreSQL or prove database workflows work.

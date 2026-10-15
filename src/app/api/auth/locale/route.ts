@@ -1,7 +1,7 @@
 import { errorResponse, jsonResponse, readJson } from "@/lib/api";
-import { getSession, persistSession } from "@/lib/auth";
+import { ApiError } from "@/lib/authorization";
+import { createSession, getSession, persistSession } from "@/lib/auth";
 import { getDemoStore } from "@/lib/demo-store";
-import { SignJWT } from "jose";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { appLocales } from "@/lib/domain";
@@ -12,28 +12,27 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request): Promise<Response> {
   try {
     const session = await getSession();
-    if (!session) throw new Error("UNAUTHORIZED");
+    if (!session) throw new ApiError(401, "UNAUTHORIZED", "Authentication required.");
     const { locale } = (await readJson(request)) as { locale: string };
-    if (!appLocales.includes(locale as (typeof appLocales)[number])) throw new Error("INVALID_LOCALE");
-    if (config.dataMode === "postgres") await prisma.user.update({ where: { id: session.id }, data: { preferredLanguage: locale as (typeof appLocales)[number] } });
-    else {
+    if (!appLocales.includes(locale as (typeof appLocales)[number])) throw new ApiError(400, "INVALID_LOCALE", "Unsupported locale.");
+    let updatedUser: Awaited<ReturnType<typeof prisma.user.update>> | null = null;
+    if (config.dataMode === "postgres") {
+      updatedUser = await prisma.user.update({ where: { id: session.id }, data: { preferredLanguage: locale as (typeof appLocales)[number] } });
+    } else {
       const data = getDemoStore();
       const user = data.users.find((u) => u.id === session.id);
       if (user) user.preferredLanguage = locale as (typeof appLocales)[number];
     }
-    const encoder = new TextEncoder();
-    const token = await new SignJWT({
-      name: session.name,
-      email: session.email,
-      role: session.role,
-      preferredLanguage: locale,
-      centerIds: session.centerIds,
-    })
-      .setProtectedHeader({ alg: "HS256" })
-      .setSubject(session.id)
-      .setIssuedAt()
-      .setExpirationTime("12h")
-      .sign(encoder.encode(process.env.AUTH_SECRET ?? "balsathi-dev-only-secret-change-me"));
+    const token = await createSession({
+      ...session,
+      ...(updatedUser ? { name: updatedUser.name, email: updatedUser.email, role: updatedUser.role, centerIds: updatedUser.centerIds } : {}),
+      preferredLanguage: locale as (typeof appLocales)[number],
+      phone: "",
+      active: true,
+      passwordHash: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
     await persistSession(token);
     return jsonResponse({ success: true, locale });
   } catch (error) {

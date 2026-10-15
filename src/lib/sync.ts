@@ -1,5 +1,5 @@
-// Offline sync queue backed by localStorage (demo implementation).
-// In production, this would use IndexedDB with a sync worker.
+// Offline sync queue backed by localStorage. Dispatch is disabled until each
+// entity has a durable, idempotent server synchronization contract.
 
 export type SyncStatus = "PENDING" | "RETRYING" | "SYNCED" | "FAILED";
 export type SyncAction = "CREATE" | "UPDATE" | "DELETE";
@@ -63,45 +63,20 @@ export function clearSyncQueue() {
   saveQueue([]);
 }
 
-async function syncSingle(item: SyncQueueItem): Promise<boolean> {
-  // Simulate network sync. In production, POST to the appropriate API endpoint.
-  await new Promise((r) => setTimeout(r, 300));
-  // Randomly fail some to demonstrate conflict handling (10% failure rate).
-  if (Math.random() < 0.1) {
-    throw new Error("Network error during sync");
-  }
-  return true;
-}
-
 export interface SyncResult {
   success: number;
   failed: number;
 }
 
 export async function syncPendingItems(): Promise<SyncResult> {
-  const items = getSyncQueue();
-  const pending = items.filter((i) => i.status === "PENDING" || i.status === "RETRYING");
-  let success = 0;
-  let failed = 0;
-
+  const pending = getSyncQueue().filter((item) => item.status === "PENDING" || item.status === "RETRYING");
   for (const item of pending) {
-    updateSyncItem(item.id, { status: "RETRYING" });
-    try {
-      await syncSingle(item);
-      updateSyncItem(item.id, { status: "SYNCED", syncedAt: new Date().toISOString(), error: null });
-      success++;
-    } catch (e: any) {
-      const retries = item.retries + 1;
-      if (retries >= 3) {
-        updateSyncItem(item.id, { status: "FAILED", retries, error: e.message });
-      } else {
-        updateSyncItem(item.id, { status: "RETRYING", retries, error: e.message });
-      }
-      failed++;
-    }
+    updateSyncItem(item.id, {
+      status: "FAILED",
+      error: "Automatic sync is unavailable. Export or copy this item before clearing the queue.",
+    });
   }
-
-  return { success, failed };
+  return { success: 0, failed: pending.length };
 }
 
 export function getPendingCount(): number {

@@ -37,7 +37,7 @@ const demoRoles: DemoRole[] = [
   },
 ];
 
-export function LoginForm() {
+export function LoginForm({ dataMode }: { dataMode: "demo" | "postgres" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -99,8 +99,8 @@ export function LoginForm() {
 
   return (
     <div className="space-y-5">
-      {/* Demo role cards */}
-      <div>
+      {/* Demo role cards are unavailable for real database accounts. */}
+      {dataMode === "demo" && <div>
         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Quick Demo Login</p>
         <div className="grid grid-cols-3 gap-2">
           {demoRoles.map((role) => {
@@ -131,7 +131,7 @@ export function LoginForm() {
         <p className="text-[11px] text-stone-400 text-center mt-2">
           Click a role to instantly log in with the demo account
         </p>
-      </div>
+      </div>}
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
@@ -198,9 +198,9 @@ export function LoginForm() {
         </button>
       </form>
 
-      <p className="text-center text-xs text-stone-400">
+      {dataMode === "demo" && <p className="text-center text-xs text-stone-400">
         Demo password for all accounts: <span className="font-mono font-medium">balsathi123</span>
-      </p>
+      </p>}
     </div>
   );
 }

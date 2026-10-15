@@ -53,6 +53,7 @@ export default function OfflinePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">Offline Data & Sync</h1>
+      <div role="status" className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Offline queue entries are stored in this browser only. Automatic upload is not implemented; the app will never mark an item synced unless a server confirms it.</div>
 
       {/* Status banner */}
       <div className={cn(
@@ -69,13 +70,13 @@ export default function OfflinePage() {
           <h3 className="font-semibold text-stone-800">{online ? "Online" : "Offline Mode"}</h3>
           <p className="text-sm text-stone-500">
             {online
-              ? "You are connected. Data will sync automatically."
-              : "No internet. Observations will be saved locally and synced when reconnected."}
+              ? "You are connected. Queued entries still require manual recovery; automatic sync is unavailable."
+              : "No internet. Entries already queued remain on this device and are not uploaded automatically when you reconnect."}
           </p>
         </div>
         <button onClick={runSync} disabled={!online || syncing || pendingCount === 0} className="btn-primary">
           {syncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Sync Now ({pendingCount})
+          Check queue ({pendingCount})
         </button>
       </div>
 
@@ -102,7 +103,7 @@ export default function OfflinePage() {
           {queue.length === 0 && (
             <p className="text-sm text-stone-400 text-center py-6">
               <Database className="w-8 h-8 mx-auto mb-2 text-stone-300" />
-              No pending sync items. All data is up to date.
+              No pending queue items. This does not verify that all data is up to date.
             </p>
           )}
           {queue.map((item) => (

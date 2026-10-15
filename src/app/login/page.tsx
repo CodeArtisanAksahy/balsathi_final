@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { LoginForm } from "@/components/login-form";
+import { config } from "@/lib/config";
 
 export default async function LoginPage() {
   const session = await getSession();
@@ -19,14 +20,14 @@ export default async function LoginPage() {
           <p className="text-stone-500 text-sm mt-1">Nurturing Every Child&apos;s Development Through AI</p>
           <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-amber-light text-amber-700 text-xs font-medium">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            Demo Mode — Synthetic data for demonstration
+            {config.dataMode === "demo" ? "Demo Mode — Synthetic data for demonstration" : "PostgreSQL mode — database accounts required"}
           </div>
         </div>
         <div className="card p-6 shadow-xl">
-          <LoginForm />
+          <LoginForm dataMode={config.dataMode} />
         </div>
         <p className="text-center text-xs text-stone-400 mt-4">
-          Authentication is simulated for demonstration. Use demo role cards below for quick access.
+          {config.dataMode === "demo" ? "Authentication uses allowlisted demo accounts. Do not enter real personal or child information." : "Sign in with an account provisioned in the PostgreSQL database."}
         </p>
       </div>
     </div>

@@ -1,39 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
-  Activity, Server, Database, Cloud, Shield, Clock, CheckCircle2,
-  AlertTriangle, XCircle, RefreshCw,
+  Server, Database, Shield, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const services = [
-  { id: "api", name: "API Server", status: "healthy", latency: "42ms" },
-  { id: "db", name: "Database", status: "healthy", latency: "12ms" },
-  { id: "auth", name: "Authentication", status: "healthy", latency: "18ms" },
-  { id: "storage", name: "File Storage", status: "healthy", latency: "35ms" },
-  { id: "llm", name: "AI Service", status: "degraded", latency: "—" },
-  { id: "sync", name: "Offline Sync", status: "healthy", latency: "28ms" },
-];
-
-const systemStats = [
-  { label: "Uptime", value: "99.8%", icon: Clock, color: "text-forest" },
-  { label: "Requests/min", value: "142", icon: Activity, color: "text-blue-600" },
-  { label: "Active Users", value: "7", icon: CheckCircle2, color: "text-purple-600" },
-  { label: "Errors (24h)", value: "3", icon: AlertTriangle, color: "text-amber-600" },
+  { id: "api", name: "API Server", status: "unknown", latency: "Not checked" },
+  { id: "db", name: "Database", status: "unknown", latency: "Not checked" },
+  { id: "auth", name: "Authentication", status: "unknown", latency: "Not checked" },
+  { id: "storage", name: "File Storage", status: "unknown", latency: "Not checked" },
+  { id: "llm", name: "AI Service", status: "unknown", latency: "Not checked" },
+  { id: "sync", name: "Offline Sync", status: "degraded", latency: "Unavailable" },
 ];
 
 export default function AdminSystemHealthPage() {
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState("Not checked");
+  const [apiError, setApiError] = useState("");
 
-  function refresh() {
+  async function refresh() {
     setRefreshing(true);
-    setTimeout(() => {
+    setApiError("");
+    try {
+      const startedAt = performance.now();
+      const response = await fetch("/api/health", { cache: "no-store" });
+      if (!response.ok) throw new Error(`Health endpoint returned ${response.status}.`);
+      await response.json();
+      setApiStatus(`${Math.round(performance.now() - startedAt)}ms (liveness only)`);
+      setLastUpdate(new Date().toLocaleTimeString());
+    } catch (error) {
+      setApiStatus("Unreachable");
+      setApiError(error instanceof Error ? error.message : "Health check failed.");
+    } finally {
       setRefreshing(false);
-      setLastUpdate(new Date());
-    }, 800);
+    }
   }
+
+  const serviceRows = services.map((service) => service.id === "api"
+    ? { ...service, status: apiError ? "degraded" : apiStatus === "Not checked" ? "unknown" : "healthy", latency: apiStatus }
+    : service);
 
   return (
     <div className="space-y-6">
@@ -54,27 +62,18 @@ export default function AdminSystemHealthPage() {
         </button>
       </div>
 
-      <p className="text-xs text-stone-400">Last updated: {lastUpdate.toLocaleTimeString()}</p>
+      <p className="text-xs text-stone-400">Last API check: {lastUpdate ?? "Never"}</p>
+      {apiError && <p role="alert" className="text-sm text-risk-red">{apiError}</p>}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {systemStats.map((s) => {
-          const Icon = s.icon;
-          return (
-            <div key={s.label} className="card p-4">
-              <Icon className={cn("w-6 h-6 mb-2", s.color)} />
-              <div className="text-2xl font-bold text-stone-800">{s.value}</div>
-              <div className="text-xs text-stone-500">{s.label}</div>
-            </div>
-          );
-        })}
+      <div role="status" className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        Live service telemetry is not configured. Values on this page are not production health measurements.
       </div>
 
       {/* Service status */}
       <div className="card p-5">
         <h3 className="font-semibold text-stone-800 mb-4">Service Status</h3>
         <div className="space-y-2">
-          {services.map((svc) => (
+          {serviceRows.map((svc) => (
             <div key={svc.id} className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
               <div className="flex items-center gap-3">
                 <StatusDot status={svc.status} />
@@ -85,9 +84,9 @@ export default function AdminSystemHealthPage() {
               </div>
               <span className={cn(
                 "badge text-xs",
-                svc.status === "healthy" ? "bg-forest/10 text-forest" : "bg-amber-100 text-amber-700",
+                svc.status === "healthy" ? "bg-forest/10 text-forest" : svc.status === "unknown" ? "bg-stone-200 text-stone-600" : "bg-amber-100 text-amber-700",
               )}>
-                {svc.status === "healthy" ? "Operational" : "Degraded"}
+                {svc.status === "healthy" ? "Reachable" : svc.status === "unknown" ? "Not measured" : "Unavailable"}
               </span>
             </div>
           ))}
@@ -98,10 +97,9 @@ export default function AdminSystemHealthPage() {
       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
         <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-medium text-amber-800">AI Service in Demo Mode</p>
+          <p className="text-sm font-medium text-amber-800">AI Service Configuration</p>
           <p className="text-xs text-amber-700 mt-0.5">
-            No LLM provider is configured. The AI service uses rule-based templates and mock responses.
-            Set an AI provider API key to enable full AI functionality.
+            The health page does not probe an AI provider. The assistant uses rule-based templates unless a supported provider is configured.
           </p>
         </div>
       </div>
@@ -114,9 +112,10 @@ export default function AdminSystemHealthPage() {
             <h3 className="font-semibold text-stone-800">Database</h3>
           </div>
           <div className="space-y-3 text-sm">
-            <Row label="Connection" value="In-Memory Store" />
-            <Row label="Mode" value="Demo" />
-            <Row label="Records" value="~450" />
+            <Row label="Connection" value="Not measured" />
+            <Row label="API liveness" value={apiStatus} />
+            <Row label="Mode" value="Not measured" />
+            <Row label="Records" value="Not measured" />
             <Row label="Last Backup" value="Not configured" />
           </div>
         </div>
@@ -126,10 +125,10 @@ export default function AdminSystemHealthPage() {
             <h3 className="font-semibold text-stone-800">Security</h3>
           </div>
           <div className="space-y-3 text-sm">
-            <Row label="SSL/TLS" value="Active" />
-            <Row label="Auth Method" value="JWT + bcrypt" />
-            <Row label="Rate Limiting" value="Enabled" />
-            <Row label="Active Sessions" value="12" />
+            <Row label="SSL/TLS" value="Deployment managed" />
+            <Row label="Auth Method" value="Configured per deployment" />
+            <Row label="Rate Limiting" value="Not measured" />
+            <Row label="Active Sessions" value="Not measured" />
           </div>
         </div>
       </div>
@@ -147,8 +146,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function StatusDot({ status }: { status: string }) {
-  if (status === "healthy") {
-    return <span className="w-2.5 h-2.5 rounded-full bg-forest animate-pulse" />;
-  }
+  if (status === "healthy") return <span className="w-2.5 h-2.5 rounded-full bg-forest" />;
+  if (status === "unknown") return <span className="w-2.5 h-2.5 rounded-full bg-stone-400" />;
   return <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />;
 }

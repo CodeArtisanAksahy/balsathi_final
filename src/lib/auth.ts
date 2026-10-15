@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { getDemoStore } from "./demo-store";
-import { assertSecureAuthConfiguration, config } from "./config";
+import { assertSecureAuthConfiguration, config, isPostgresMode } from "./config";
 import type { AppLocale, SessionUser, User } from "./domain";
 
 const encoder = new TextEncoder();
@@ -60,11 +60,30 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!token) return null;
   try {
     const payload = await jwtVerify(token, secretKey());
+    const id = payload.payload.sub ?? "";
+    const role = payload.payload.role as SessionUser["role"];
+    if (!id || !["WORKER", "PARENT", "CENTER_ADMIN", "DISTRICT_ADMIN"].includes(role)) return null;
+
+    // In PostgreSQL mode, JWT claims are only an identity pointer. Reload active
+    // authorization attributes so deactivation and scope changes take effect now.
+    if (isPostgresMode()) {
+      const { prisma } = await import("./prisma");
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user?.active) return null;
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        preferredLanguage: user.preferredLanguage,
+        centerIds: user.centerIds,
+      };
+    }
     return {
-      id: payload.payload.sub ?? "",
+      id,
       name: String(payload.payload.name ?? ""),
       email: String(payload.payload.email ?? ""),
-      role: payload.payload.role as SessionUser["role"],
+      role,
       preferredLanguage: payload.payload.preferredLanguage as AppLocale,
       centerIds: Array.isArray(payload.payload.centerIds) ? payload.payload.centerIds.map(String) : [],
     };
