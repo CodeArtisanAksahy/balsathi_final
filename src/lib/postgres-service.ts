@@ -175,6 +175,20 @@ export async function updateDatabaseObservation(session: SessionUser, id: string
   });
 }
 
+export async function updateDatabaseChild(session: SessionUser, id: string, updates: {
+  fullName?: string; dateOfBirth?: string; gender?: "FEMALE" | "MALE" | "OTHER" | "UNSPECIFIED"; primaryLanguage?: AppLocale;
+}, expectedUpdatedAt?: string) {
+  if (session.role === "PARENT" || session.role === "WORKER") throw new ApiError(403, "FORBIDDEN", "Your role cannot update child profiles.");
+  const existing = await prisma.child.findFirst({ where: { id, ...childScopeWhere(session) } });
+  if (!existing) throw new ApiError(404, "CHILD_NOT_FOUND", "Child record not found.");
+  if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) throw new ApiError(412, "VERSION_CONFLICT", "Child changed; reload before saving.");
+  return prisma.$transaction(async (tx) => {
+    const saved = await tx.child.update({ where: { id }, data: { ...updates, ...(updates.dateOfBirth ? { dateOfBirth: new Date(`${updates.dateOfBirth}T00:00:00.000Z`) } : {}) } });
+    await tx.auditLog.create({ data: { actorId: session.id, action: "child.updated", entityType: "Child", entityId: id, scopeCenterId: existing.centerId, metadata: { fields: Object.keys(updates) } } });
+    return saved;
+  });
+}
+
 export async function createDatabaseMilestoneAssessment(session: SessionUser, childId: string, input: {
   milestoneId: string; status: AssessmentStatus; notes: string;
 }) {

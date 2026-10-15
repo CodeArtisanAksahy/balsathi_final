@@ -5,12 +5,14 @@ import { getDemoStore } from "@/lib/demo-store";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { appLocales } from "@/lib/domain";
+import { assertSameOrigin } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
   try {
+    assertSameOrigin(request);
     const session = await getSession();
     if (!session) throw new ApiError(401, "UNAUTHORIZED", "Authentication required.");
     const { locale } = (await readJson(request)) as { locale: string };

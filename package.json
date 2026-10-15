@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:forecast-integration": "tsx src/scripts/test-forecast-integration.ts",
+    "test:postgres-integration": "tsx --env-file=.env src/scripts/test-postgres-integration.ts",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:seed": "tsx prisma/seed.ts",

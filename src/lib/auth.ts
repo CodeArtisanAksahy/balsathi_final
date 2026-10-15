@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { getDemoStore } from "./demo-store";
-import { assertSecureAuthConfiguration, config, isPostgresMode } from "./config";
+import { assertSecureAuthConfiguration, config } from "./config";
 import type { AppLocale, SessionUser, User } from "./domain";
 
 const encoder = new TextEncoder();
@@ -66,7 +66,7 @@ export async function getSession(): Promise<SessionUser | null> {
 
     // In PostgreSQL mode, JWT claims are only an identity pointer. Reload active
     // authorization attributes so deactivation and scope changes take effect now.
-    if (isPostgresMode()) {
+    if (config.dataMode === "postgres") {
       const { prisma } = await import("./prisma");
       const user = await prisma.user.findUnique({ where: { id } });
       if (!user?.active) return null;

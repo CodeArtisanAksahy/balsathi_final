@@ -65,3 +65,56 @@ No real historical PostgreSQL observation data was queried. No production model 
 5. Add live readiness/telemetry checks, backups, retention/deletion controls, and independent security/privacy review.
 6. Resolve compatible ESLint dependency advisories without downgrading the framework; migrate Prisma configuration before Prisma 7.
 7. Train/evaluate the aggregate model only after validated real monthly history is available. Keep it unavailable when history or artifact criteria are unmet.
+
+
+## Phase 2 update — 15 October 2026
+
+### Database configuration and live verification
+
+- Updated the ignored local `.env` to `DATA_MODE=postgres` and the user-specified local database target (`balsathi_ai`). Existing app/auth settings were preserved. No connection string or secret was added to tracked files.
+- PostgreSQL at localhost accepted connections as `akshaythakur`. Before writes, the target database reported zero public tables and zero centers, users, children, or observations. The two checked-in Prisma migrations were applied with `npm run db:migrate:deploy`; `npx prisma migrate status` then reported the schema up to date.
+- Added `npm run test:postgres-integration`. The explicit fixture mode refuses production, requires an explicit opt-in, only permits a clearly named test database, and refuses any database containing centers/users/children/observations. It created temporary fixtures and verified PostgreSQL login/session, role change and account disablement against an existing cookie, center-admin/worker/parent authorization, child profile retrieval, observation creation/readback, duplicate idempotency, stale update conflict, invalid request rejection, readiness, and forecast failure handling. The suite passed; a follow-up SQL check verified all fixture records were removed and the database returned to zero data rows in those core tables.
+- No real users or real observations were found. The database contains 0 observation months. No real-data model training or model artifact creation was possible, and no MAE/RMSE claim is made.
+- An existing ignored `ML_MODEL_PATH` target is present but does not have matching verified PostgreSQL evaluation metadata. POST forecast returned `MODEL_EVALUATION_INVALID` (503) and wrote no prediction. This is an honest rejection, not a successful inference.
+
+### Changes made in Phase 2
+
+- Added `/api/health/ready`, separate from liveness. It checks PostgreSQL with a short timeout and reports model file availability independently; the public response contains only dependency state.
+- Added login rate limiting and same-origin checks to cookie-authenticated locale/logout mutations. The limit is process-local and is not a distributed control for multi-instance deployment.
+- Fixed PostgreSQL session resolution to branch from the current `config.dataMode`, avoiding a potentially stale module-level mode helper.
+- Routed child profile edits through a service that applies current role/center scope, checks `If-Match`, and commits the update and audit event together.
+- Corrected the help page’s offline claim: automatic capture and sync are unavailable. Existing queue behavior continues to avoid reporting unconfirmed records as synced.
+- Added request-security unit tests and a real PostgreSQL/API integration script with fixture and read-only modes.
+
+### Phase 2 verification
+
+| Check | Outcome |
+| --- | --- |
+| `npm run db:migrate:deploy` | PASS — both migrations applied to initially empty `balsathi_ai`. |
+| `npx prisma migrate status` | PASS — schema up to date. |
+| `npm run test:postgres-integration` with explicit temporary-fixture opt-in and local app | PASS — login/session, permission boundaries, role/scope refresh, deactivation, child read, observation create/readback, duplicate retry, version conflict, invalid input, readiness, and safe forecast rejection. Fixtures removed and verified absent. |
+| `npm test` | PASS — 11 Node tests and 16 Vitest tests (27 total), including same-origin and rate-limit checks. |
+| `npm run typecheck` | PASS. |
+| `npm run lint` | PASS — 63 warnings, 0 errors. Warnings are existing unused imports/variables and one existing image optimization warning. |
+| `npm run test:e2e` | PASS — 2 Playwright smoke tests after stopping the temporary integration server. |
+| `npm run db:validate` | PASS — Prisma schema valid. Prisma still warns that `package.json#prisma` configuration is deprecated. |
+| `npm run build` | PASS — Next.js production build completed, including readiness route. |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 production vulnerabilities. |
+| `npm audit --audit-level=high` | FAIL — 5 high-severity issues remain in the Next ESLint development dependency chain; suggested forced fix downgrades framework config to Next 14 and was not applied. |
+
+### Remaining limitations
+
+- The database is intentionally empty after tests; production login/core workflows still require controlled provisioning of real users, centers, and milestone definitions.
+- Read-only forecast verification against a provisioned real-data tenant was not run. No historical data, accepted real-data artifact, or prediction persistence path with a trained model was available. The current artifact is rejected for invalid evaluation provenance.
+- Offline capture/sync remains unavailable and is described as unavailable in the UI/help. Password reset, durable server-side session revocation, distributed rate limiting, broad per-route CSRF/origin coverage, backups, telemetry, and retention/deletion operations still need production implementations.
+- Full PostgreSQL persistence remains partial for unsupported chat, upload, transcription, and related workflows; those API routes return explicit unavailable errors where implemented.
+- Prisma configuration migration and compatible remediation of the development dependency advisories remain outstanding.
+
+### Exact next steps
+
+1. Provision a real PostgreSQL admin, center, workers, parent links, and milestone definitions through a controlled process; do not seed demo fixtures.
+2. Run the read-only integration mode with `TEST_API_BASE_URL` and `TEST_FORECAST_ADMIN_USER_ID` against that deployment. Confirm readiness, scoped dashboard, login, child CRUD/observation workflows, and database-backed reports.
+3. Only after at least 24 consecutive validated real observation months exist, export aggregate counts, train/evaluate chronologically against the naive baseline, and configure the artifact plus evaluation metadata.
+4. Implement distributed login/sensitive-route rate limits, durable session revocation, complete origin policy, and password reset only when email delivery infrastructure is configured.
+5. Implement secure offline storage and idempotent server synchronization before re-enabling offline capture.
+6. Resolve ESLint dependency advisories without framework downgrade and migrate Prisma config before Prisma 7.

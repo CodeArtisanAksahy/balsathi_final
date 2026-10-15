@@ -57,6 +57,7 @@ export const config = {
 
   rateLimit: {
     chatMaxPerMinute: envNumber("CHAT_RATE_LIMIT_PER_MIN", 10),
+    authMaxPerMinute: envNumber("AUTH_RATE_LIMIT_PER_MIN", 10),
   },
 
   defaultLocale: env("DEFAULT_LOCALE", "en") as AppLocale,

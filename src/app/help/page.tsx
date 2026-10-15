@@ -8,7 +8,7 @@ const faqs = [
   { q: "How do I record a new observation?", a: "Go to the dashboard and click 'Add Observation', then select the child, domain, and fill in the observation details." },
   { q: "What does 'At Risk' mean?", a: "'At Risk' indicates that a child may need additional assessment based on recorded observations. This is not a diagnosis — it flags areas for follow-up." },
   { q: "How do I switch languages?", a: "Use the language selector in the top right header. Your preference is saved automatically." },
-  { q: "Can I use the app offline?", a: "Yes. Observations recorded offline are saved locally and automatically synced when you reconnect. Check the Offline page for sync status." },
+  { q: "Can I use the app offline?", a: "Automatic offline capture and synchronization are unavailable. The Offline page can show locally queued items, but they are not uploaded when you reconnect. Save observations while connected and confirm the server response." },
   { q: "How does the AI Assistant work?", a: "The AI Assistant answers questions about children you are authorized to access. It retrieves actual records from the database — it never fabricates data." },
   { q: "Who can see a child's information?", a: "Only authorized workers assigned to the child's center, the child's parent/guardian, and approved administrators. Access is strictly controlled." },
 ];

@@ -2,7 +2,7 @@ import { errorResponse, jsonResponse } from "@/lib/api";
 import { getActorFromSession, requirePermission } from "@/lib/authorization";
 import { getChildProfile } from "@/lib/data";
 import { config } from "@/lib/config";
-import { getDatabaseChildProfile, childScopeWhere } from "@/lib/postgres-service";
+import { childScopeWhere, getDatabaseChildProfile, updateDatabaseChild } from "@/lib/postgres-service";
 import { prisma } from "@/lib/prisma";
 import { readJson } from "@/lib/api";
 import { z } from "zod";
@@ -32,11 +32,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     if (config.dataMode !== "postgres") return jsonResponse({ error: { code: "NOT_SUPPORTED", message: "Use the demo application workflow." } }, 409);
     const session = await getActorFromSession(); requirePermission(session.role, "children:update"); const { id } = await params;
-    const current = await prisma.child.findFirst({ where: { id, ...childScopeWhere(session) } });
-    if (!current) return jsonResponse({ error: { code: "CHILD_NOT_FOUND", message: "Child record not found." } }, 404);
-    const match = request.headers.get("if-match"); if (match && match !== current.updatedAt.toISOString()) return jsonResponse({ error: { code: "VERSION_CONFLICT", message: "Child changed; reload before saving." } }, 412);
     const input = updateSchema.parse(await readJson(request));
-    const saved = await prisma.$transaction(async (tx) => { const row = await tx.child.update({ where: { id }, data: { ...input, ...(input.dateOfBirth ? { dateOfBirth: new Date(`${input.dateOfBirth}T00:00:00.000Z`) } : {}) } }); await tx.auditLog.create({ data: { actorId: session.id, action: "child.updated", entityType: "Child", entityId: id, scopeCenterId: current.centerId, metadata: { fields: Object.keys(input) } } }); return row; });
+    const saved = await updateDatabaseChild(session, id, input, request.headers.get("if-match") ?? undefined);
     return jsonResponse(saved, 200, { ETag: saved.updatedAt.toISOString() });
   } catch (error) { return errorResponse(error); }
 }
