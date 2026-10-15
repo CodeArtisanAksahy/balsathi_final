@@ -118,3 +118,42 @@ No real historical PostgreSQL observation data was queried. No production model 
 4. Implement distributed login/sensitive-route rate limits, durable session revocation, complete origin policy, and password reset only when email delivery infrastructure is configured.
 5. Implement secure offline storage and idempotent server synchronization before re-enabling offline capture.
 6. Resolve ESLint dependency advisories without framework downgrade and migrate Prisma config before Prisma 7.
+
+
+## PostgreSQL environment setup update — 15 October 2026
+
+### Environment discovered
+
+- macOS 15.7.4, Apple Silicon `arm64`; user `akshaythakur`; shell `/bin/zsh`.
+- Homebrew 7.0.9 is installed at `/opt/homebrew/bin/brew`.
+- Homebrew `postgresql@16` is installed; PostgreSQL client/server utilities report 16.15.
+- `postgresql@16` Homebrew service is already `started`; `pg_isready -h localhost -p 5432` reports accepting connections.
+- Node.js v25.6.0 and npm 11.9.0 are available. (The app declares Node >=20.19.)
+- The project uses Prisma 6 with `DATABASE_URL`; no `DIRECT_URL` or `prisma.config.ts` is currently used.
+
+### Database and environment status
+
+- Local role `akshaythakur` connects successfully to PostgreSQL. The `balsathi_ai` database already exists and is accessible; no role/database/service installation or global authentication change was required.
+- `.env` has `DATA_MODE`, `DATABASE_URL`, `APP_ORIGIN`, `AUTH_SECRET`, and `ML_MODEL_PATH` configured; no `DIRECT_URL` or live forecast-test admin/base URL is configured. Only variable names were inspected.
+- `git check-ignore .env` confirms `.env` is ignored.
+- The actual connection was verified through Prisma using its `.env` loading: current database `balsathi_ai`, current user `akshaythakur`, PostgreSQL 16.15.
+- `psql "$DATABASE_URL"` from the shell did not work because `.env` values are not exported into the shell. `psql` therefore defaulted to database `akshaythakur` and returned “database does not exist.” This does not indicate an app connectivity failure; Prisma and the running app connected successfully.
+- `npx prisma migrate status` reports 2 migrations found and the schema up to date. `npm run db:validate` and `npm run typecheck` pass.
+
+### App integration verification
+
+- Started the app in PostgreSQL mode on a temporary local port. `/api/health` returned 200 with mode `postgres`; `/api/health/ready` returned 200 with database `ready`; unauthenticated forecast GET returned 401.
+- `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3021 npm run test:e2e`: PASS, 2/2. This included the PostgreSQL-mode login page and GET/POST forecast unauthorized checks.
+- No provisioned application users, centers, children, or observations were available for authenticated workflow verification. The prior fixture integration harness deliberately refuses non-empty databases, so it was not rerun against this existing database. No user/child data was changed in this phase.
+- The ignored configured model path is reachable, but readiness only reports file presence. It does not prove provenance/evaluation validity; previous authenticated fixture testing showed the forecast route rejects the current evaluation metadata. No real model training, authenticated forecast, or real-data accuracy is claimed.
+
+### Files changed for this environment check
+
+Only `AUDIT_AND_FIX_REPORT.md` was updated. No PostgreSQL software, service configuration, global shell PATH, database role, database, `.env`, or real data was changed. Existing untracked `desktop/` remains untouched.
+
+### Remaining exact actions
+
+1. Provision a real app admin and center/worker records through the project’s controlled provisioning process; do not seed demo data into PostgreSQL.
+2. Configure `TEST_API_BASE_URL` and `TEST_FORECAST_ADMIN_USER_ID` in the ignored local environment when a suitable test admin exists, then run the read-only integration mode of `npm run test:postgres-integration`.
+3. For a direct `psql` shell check, safely export only for the command with an environment-file-aware tool, or run `node --env-file=.env` with Prisma as done above. Do not paste credentials into terminal history.
+4. Keep PostgreSQL 16 service and existing data directory unchanged; no install/start step is needed on this Mac.
