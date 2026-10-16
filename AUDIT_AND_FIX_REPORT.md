@@ -1,13 +1,13 @@
 # Balsathi AI — Audit and Fix Report
 
-**Audit date:** 15 October 2026
+**Audit date:** 16 October 2026
 **Scope:** repository documentation, build/start configuration, authentication and authorization paths, dashboard/API behavior, uploads, offline queue, selected PostgreSQL/forecast code, dependency configuration, and available automated checks.
 
-> **Latest status — SQLite migration completed 15 October 2026:** The active Prisma datasource and migration history now target SQLite. The PostgreSQL migration files remain preserved under `prisma/postgresql-migrations-legacy/`; the original local PostgreSQL database was not modified by this conversion. Read-only inspection confirmed 21 existing public tables and zero rows in `Center`, `User`, `Child`, and `Observation`, so no application records from those core tables required import. SQLite migrations and an isolated SQLite CRUD/auth integration test passed. See the dated section at the end for this phase's exact results. Earlier PostgreSQL status entries below are historical and have been superseded where they conflict with this update.
+> **Latest status — critical features implementation, 16 October 2026:** SQLite remains active and existing database files were not reset. This phase added authorized center/account provisioning, durable session revocation, persistent single-host login rate limiting, model readiness validation, workflow regression coverage, and standalone relative SQLite path resolution. See the final dated section for exact results and limitations. Earlier status entries below are historical and have been superseded where they conflict with newer updates.
 
 ## Executive summary
 
-**Current configuration:** SQLite is the active persistence mode. The authenticated SQLite route integration, production build, unit tests, and ML tests pass. This does not establish production readiness: account/center provisioning, media upload and transcription, true offline synchronization, model evaluation on real history, durable session revocation, distributed rate limiting, and container verification remain incomplete or infrastructure-dependent. Earlier PostgreSQL phases below are historical and are superseded by the SQLite phase and current audit addendum at the end.
+**Current configuration:** SQLite is the active persistence mode. Authorized account/center provisioning for district and center administrators, workers, and linked parent accounts is implemented; durable revocation, single-host persistent login throttling, and model readiness checks are also implemented. Unit, API integration, E2E smoke, ML tests, typecheck, lint, and production build pass. This does not establish production readiness: first district administrator bootstrap is controlled/out of band, password reset/email, media transcription, durable offline sync, multi-instance rate limiting, valid real-history forecasting, production backup operations, and container startup remain incomplete or infrastructure-dependent. Earlier phases below are historical and are superseded by newer status sections.
 
 The local PostgreSQL database was previously inspected read-only: core `Center`, `User`, `Child`, and `Observation` tables had zero rows. This audit made no PostgreSQL writes and used only an isolated ignored SQLite test database for temporary fixtures. No real-data model artifact was trained or accepted, and no real-world predictive accuracy is claimed.
 
@@ -254,3 +254,47 @@ Only `AUDIT_AND_FIX_REPORT.md` was updated. No PostgreSQL software, service conf
 - Dashboard UI and other major role workflows do not yet have comprehensive browser tests with authenticated seeded tenants. The checked-in E2E suite remains two smoke tests; API integration is broader.
 - Docker daemon, backup/restore drill, and packaged stop/restart persistence were not available/verified. SQLite production deployment must retain the database volume and operate with a single writer instance.
 - Lint still reports 63 warnings. They do not fail lint, but were not mass-cleaned as unrelated polish during this audit.
+
+## Critical features implementation update — 16 October 2026
+
+### Changes made
+
+- Added authorized SQLite-backed provisioning APIs and admin screens for centers and accounts. District administrators can create center administrators, workers, and parents; center administrators can create workers and parents only within their own centers. The API does not permit creating district administrators, which must be bootstrapped through controlled deployment administration. No default user or credentials are created.
+- Parent account provisioning requires the supplied name, phone, and relationship to match an existing unlinked guardian record and validates each child against the provisioning administrator's center scope. Duplicate normalized email and center code are rejected. Passwords require at least 12 characters and are entered by an administrator for secure out-of-band delivery; there is no email delivery/reset integration.
+- User role/password/deactivation changes revoke active sessions. Center deactivation is blocked while active children remain; affected staff assignments/sessions are cleaned up and changes are audited. Account changes prevent self-demotion/deactivation through these endpoints.
+- Added the `AuthSession` and `RateLimitBucket` SQLite tables with additive migrations `20261016000000_auth_sessions` and `20261016010000_persistent_rate_limits`. Session resolution validates durable session state plus current user status and scope. Login throttling uses persistent SQLite buckets for single-host deployment and HMAC’d client identifiers; it does not store raw IP addresses.
+- Tightened forecast model provenance/readiness checks, including artifact/report identity, real-data validation, chronological holdout sample/metric requirements, baseline comparison, and data cutoff. Health readiness reports model state, and invalid or missing provenance is rejected without creating predictions.
+- Fixed standalone startup so relative SQLite database and local model/storage paths resolve from the project root rather than the standalone server's nested working directory. This prevents migrations and requests from accidentally opening different relative database files.
+- Expanded isolated SQLite API integration coverage for provisioning, role and center isolation, linked parent access, durable session expiry/revocation, persistent login limits, child registration/profile updates, observations, growth, milestones, follow-ups, reports, idempotency, stale writes, and safe forecast rejection. Added frontend provisioning and model-readiness unit tests.
+- Updated login UI to show password recovery as unavailable when no delivery service is configured and removed the inert remember-me option.
+
+### Verification performed
+
+| Check | Result |
+| --- | --- |
+| `npm run test:sqlite-integration` | PASS — 20 labeled checks, migrations current, provisioning and core workflows persisted through the isolated SQLite API; test-created fixtures were cleaned. |
+| `npm test` | PASS — 11 Node tests and 25 Vitest tests, 36 total. |
+| `npm run test:e2e` | PASS — 2/2 Playwright smoke tests. |
+| `python3 -m pytest -q ml/tests` | PASS — 68 passed, 2 skipped. This is code/test validation only, not real-data accuracy evaluation. |
+| `npm run typecheck` | PASS. |
+| `npm run db:validate` | PASS — Prisma schema valid. Migrations were applied additively to the local and isolated SQLite databases; neither database was reset. |
+| `npm run build` | PASS — optimized production build including provisioning and readiness routes. |
+| `npm run lint` | PASS — 0 errors, 59 warnings. |
+| Production standalone restart smoke with relative `DATABASE_URL=file:./test.db` | PASS — two invalid login attempts returned 401; after stopping and restarting the server, the same client was rate-limited with 429. This also verified standalone startup used the migrated SQLite database. |
+| SQLite backup/restore drill | PASS — used SQLite's backup API on the isolated `prisma/test.db`; restored copy passed `PRAGMA integrity_check` (`ok`) with 23 tables. This does not constitute a production backup/restore rehearsal. |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 production vulnerabilities. |
+| `npm audit --audit-level=high` | FAIL — five high-severity findings remain in the development-only Next ESLint dependency chain. npm's suggested forced fix downgrades `eslint-config-next` to 14.2.35, incompatible with the project's Next 16 framework, and was not applied. |
+| Docker daemon / image build | BLOCKED — Docker CLI 28.1.1 is installed, but it cannot connect to `unix:///Users/akshaythakur/.docker/run/docker.sock`; Docker image build/startup therefore was not verified. |
+| Real monthly history / model training | NOT AVAILABLE — previous read-only PostgreSQL inspection found zero rows in the core observation table. This phase did not find validated 24-month SQLite history, create a real model artifact, or evaluate real-data MAE/RMSE. No prediction accuracy claim is made. |
+
+### Remaining limitations and deployment requirements
+
+- The initial district administrator must be provisioned through a controlled deployment/bootstrap process. No bootstrap command that creates credentials was added.
+- Password reset remains explicitly unavailable until an email delivery provider and secure token flow are configured. Administrators must securely deliver initial credentials; the app does not send them.
+- SQLite persistent throttling and sessions work across process restart on one host. Multiple replicas require a shared session/rate-limit store and a trusted proxy that sanitizes forwarded IP headers. SQLite deployment must retain its persistent volume and use one writer instance.
+- Production backup scheduling, retention, off-host copies, and restore procedures remain operational work. The passing drill covered only an isolated test DB.
+- Docker packaging was not validated because the daemon is unavailable. No production startup/deployment readiness claim is made.
+- Media upload/transcription and durable offline capture/sync remain disabled/unavailable in SQLite mode. No external storage or transcription service was configured.
+- No valid real-data model artifact or sufficient validated monthly history is available; forecast generation stays disabled/rejected when readiness metadata is absent or invalid.
+- The two Playwright E2E checks remain smoke tests. Provisioning UI/API are covered by separate component/API tests; role-specific browser workflows have not been fully exercised against a live browser and user setup.
+- The full dependency audit still reports five high findings in the dev-only lint dependency chain, and lint has 59 warnings. Neither was addressed through an incompatible framework downgrade or unrelated bulk cleanup.

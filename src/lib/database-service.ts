@@ -31,7 +31,15 @@ async function loadVerifiedModelEvaluation(artifact: string): Promise<Record<str
     const evaluationPath = process.env.ML_EVALUATION_PATH ?? path.join(path.dirname(artifact), "evaluation.json");
     const evaluation = JSON.parse(await readFile(/*turbopackIgnore: true*/ evaluationPath, "utf8")) as Record<string, unknown>;
     const digest = createHash("sha256").update(await readFile(/*turbopackIgnore: true*/ artifact)).digest("hex");
-    if (evaluation.data_source !== "sqlite_aggregate_export" || evaluation.real_data_validation !== true || evaluation.artifact_sha256 !== digest || !evaluation.metrics || !evaluation.data_cutoff) return null;
+    const metrics = evaluation.metrics as Record<string, unknown> | undefined;
+    const isMetric = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+    if (evaluation.trained !== true || evaluation.model_name !== "aggregate_observation_volume" || typeof evaluation.model_version !== "string" || !evaluation.model_version
+      || evaluation.data_source !== "sqlite_aggregate_export" || evaluation.real_data_validation !== true || evaluation.artifact_sha256 !== digest
+      || typeof evaluation.data_cutoff !== "string" || !/^\d{4}-\d{2}$/.test(evaluation.data_cutoff)
+      || typeof evaluation.sample_count !== "number" || evaluation.sample_count < 24
+      || !metrics || !isMetric(metrics.candidate_mae) || !isMetric(metrics.candidate_rmse) || !isMetric(metrics.baseline_mae) || !isMetric(metrics.baseline_rmse)
+      || typeof metrics.test_months !== "number" || metrics.test_months < 3 || metrics.candidate_mae >= metrics.baseline_mae
+      || metrics.dataset_cutoff !== evaluation.data_cutoff) return null;
     return evaluation;
   } catch {
     return null;
@@ -89,7 +97,7 @@ export async function createDatabaseChild(session: SessionUser, input: {
     prisma.user.findMany({ where: { id: input.assignedWorkerId, role: "WORKER", active: true } }),
   ]);
   const worker = workers.find((candidate) => Array.isArray(candidate.centerIds) && candidate.centerIds.includes(input.centerId));
-  if (!center) throw new ApiError(422, "INVALID_CENTER", "Selected center does not exist.");
+  if (!center?.active) throw new ApiError(422, "INVALID_CENTER", "Selected center does not exist or is inactive.");
   if (!worker) throw new ApiError(422, "INVALID_WORKER", "Selected worker is not active in this center.");
   const id = randomUUID();
   const internalId = `BAL-${id.replaceAll("-", "").slice(0, 12).toUpperCase()}`;
@@ -344,7 +352,16 @@ export async function createAggregateObservationForecast(session: SessionUser) {
     const script = path.resolve(process.cwd(), "ml", "predict.py");
     const { stdout } = await promisify(execFile)(process.env.PYTHON_BIN ?? "python3", [script, csv, "--artifact", artifact], { timeout: 15_000, maxBuffer: 64_000 });
     const prediction = JSON.parse(stdout) as { model_version: string; input_data_cutoff: string; training_data_cutoff: string; predicted_count: number; month: string; prediction_type: string; data_source: string; evaluation: Record<string, unknown>; confidence: null; note: string };
-    if (prediction.data_source !== "sqlite_aggregate_export" || prediction.prediction_type !== "aggregate_monthly_observation_volume" || !Number.isFinite(prediction.predicted_count) || prediction.predicted_count < 0 || !/^\d{4}-\d{2}$/.test(prediction.month) || !/^\d{4}-\d{2}$/.test(prediction.input_data_cutoff) || !/^\d{4}-\d{2}$/.test(prediction.training_data_cutoff) || prediction.confidence !== null) {
+    const latestInputMonth = records.at(-1)?.month;
+    const expectedForecastMonth = latestInputMonth ? new Date(`${latestInputMonth}-01T00:00:00.000Z`) : new Date(0);
+    expectedForecastMonth.setUTCMonth(expectedForecastMonth.getUTCMonth() + 1);
+    const expectedMonth = `${expectedForecastMonth.getUTCFullYear()}-${String(expectedForecastMonth.getUTCMonth() + 1).padStart(2, "0")}`;
+    if (prediction.data_source !== "sqlite_aggregate_export" || prediction.prediction_type !== "aggregate_monthly_observation_volume"
+      || prediction.model_version !== verifiedEvaluation.model_version || prediction.training_data_cutoff !== verifiedEvaluation.data_cutoff
+      || prediction.input_data_cutoff !== latestInputMonth || prediction.month !== expectedMonth
+      || !Number.isFinite(prediction.predicted_count) || prediction.predicted_count < 0
+      || !/^\d{4}-\d{2}$/.test(prediction.month) || !/^\d{4}-\d{2}$/.test(prediction.input_data_cutoff)
+      || !/^\d{4}-\d{2}$/.test(prediction.training_data_cutoff) || prediction.confidence !== null) {
       throw new ApiError(503, "INVALID_MODEL_OUTPUT", "The forecast model returned an invalid response; no prediction was saved.");
     }
     const inputCutoff = new Date(`${prediction.input_data_cutoff}-01T00:00:00.000Z`);
@@ -368,18 +385,28 @@ export async function getAggregateForecastDashboard(session: SessionUser) {
   const allRows = await prisma.mLPrediction.findMany({ where: { predictionType: "aggregate_monthly_observation_volume" }, orderBy: { generatedAt: "desc" } });
   const rows = allRows.filter((row) => {
     const rowScope = Array.isArray(row.scopeCenterIds) ? row.scopeCenterIds.map(String) : [];
-    return rowScope.some((centerId) => scopeCenterIds.includes(centerId));
+    return rowScope.length > 0 && rowScope.every((centerId) => scopeCenterIds.includes(centerId));
   }).slice(0, 30);
   const artifact = process.env.ML_MODEL_PATH;
   let evaluation: Record<string, unknown> | null = null;
   if (artifact) evaluation = await loadVerifiedModelEvaluation(artifact);
-  const forecasts = rows.filter((row) => {
+  const forecasts = evaluation ? rows.filter((row) => {
     const value = row.predictionValue as Record<string, unknown>;
-    return value.data_source === "sqlite_aggregate_export" && value.prediction_type === "aggregate_monthly_observation_volume";
-  });
+    const explanation = row.explanation as Record<string, unknown>;
+    const metadata = explanation.artifactEvaluationMetadata as Record<string, unknown> | undefined;
+    return value.data_source === "sqlite_aggregate_export" && value.prediction_type === "aggregate_monthly_observation_volume"
+      && row.modelVersion === evaluation.model_version && metadata?.artifact_sha256 === evaluation.artifact_sha256;
+  }) : [];
   const response = forecastDashboardSchema.safeParse({ history, forecasts, evaluation, historyMonths: history.length });
   if (!response.success) throw new ApiError(503, "FORECAST_RESPONSE_INVALID", "Stored forecast data failed response validation.");
   return response.data;
+}
+
+export async function getForecastModelReadiness(): Promise<"not_configured" | "artifact_missing" | "evaluation_invalid" | "verified"> {
+  const artifact = process.env.ML_MODEL_PATH;
+  if (!artifact) return "not_configured";
+  try { await access(artifact); } catch { return "artifact_missing"; }
+  return await loadVerifiedModelEvaluation(artifact) ? "verified" : "evaluation_invalid";
 }
 
 /** Fetch only observation timestamps in the caller's active child scope, then group using UTC month boundaries. */

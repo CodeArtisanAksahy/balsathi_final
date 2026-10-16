@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { getDemoStore } from "./demo-store";
@@ -19,6 +20,16 @@ export async function verifyPassword(password: string, passwordHash: string): Pr
 }
 
 export async function createSession(user: User): Promise<string> {
+  const jti = randomUUID();
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const expiresAt = new Date((issuedAt + config.sessionTtlHours * 60 * 60) * 1000);
+  if (config.dataMode === "sqlite") {
+    const { prisma } = await import("./prisma");
+    await prisma.$transaction([
+      prisma.authSession.deleteMany({ where: { expiresAt: { lte: new Date() } } }),
+      prisma.authSession.create({ data: { id: jti, userId: user.id, expiresAt } }),
+    ]);
+  }
   return new SignJWT({
     name: user.name,
     email: user.email,
@@ -27,9 +38,10 @@ export async function createSession(user: User): Promise<string> {
     centerIds: user.centerIds,
   })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(jti)
     .setSubject(user.id)
-    .setIssuedAt()
-    .setExpirationTime(`${config.sessionTtlHours}h`)
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
     .sign(secretKey());
 }
 
@@ -46,13 +58,37 @@ export async function persistSession(token: string): Promise<void> {
 
 export async function clearSession(): Promise<void> {
   const store = await cookies();
-  store.set(SESSION_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: config.isProduction,
-    path: "/",
-    maxAge: 0,
-  });
+  try { await revokeCurrentSession(); }
+  finally {
+    store.set(SESSION_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: config.isProduction,
+      path: "/",
+      maxAge: 0,
+    });
+  }
+}
+
+export async function revokeCurrentSession(): Promise<void> {
+  if (config.dataMode !== "sqlite") return;
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!token) return;
+  try {
+    const { payload } = await jwtVerify(token, secretKey());
+    if (!payload.sub || !payload.jti) return;
+    const { prisma } = await import("./prisma");
+    await prisma.authSession.updateMany({ where: { id: String(payload.jti), userId: payload.sub, revokedAt: null }, data: { revokedAt: new Date() } });
+  } catch {
+    // Expired or invalid cookies are simply cleared at logout.
+  }
+}
+
+export async function revokeUserSessions(userId: string): Promise<void> {
+  if (config.dataMode !== "sqlite") return;
+  const { prisma } = await import("./prisma");
+  await prisma.authSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
 }
 
 export async function getSession(): Promise<SessionUser | null> {
@@ -69,9 +105,17 @@ export async function getSession(): Promise<SessionUser | null> {
     // authorization attributes so deactivation and scope changes take effect now.
     if (config.dataMode === "sqlite") {
       const { prisma } = await import("./prisma");
-      const user = await prisma.user.findUnique({ where: { id } });
+      const jti = payload.payload.jti;
+      if (typeof jti !== "string") return null;
+      const [user, session] = await Promise.all([
+        prisma.user.findUnique({ where: { id } }),
+        prisma.authSession.findUnique({ where: { id: jti } }),
+      ]);
+      if (!session || session.userId !== id || session.revokedAt || session.expiresAt <= new Date()) return null;
       if (!user?.active || !appRoles.includes(user.role as SessionUser["role"]) || !appLocales.includes(user.preferredLanguage as AppLocale)) return null;
-      const centerIds = Array.isArray(user.centerIds) && user.centerIds.every((centerId) => typeof centerId === "string") ? user.centerIds as string[] : [];
+      const assignedCenterIds = Array.isArray(user.centerIds) && user.centerIds.every((centerId) => typeof centerId === "string") ? user.centerIds as string[] : [];
+      const activeCenters = assignedCenterIds.length ? await prisma.center.findMany({ where: { id: { in: assignedCenterIds }, active: true }, select: { id: true } }) : [];
+      const centerIds = activeCenters.map((center) => center.id);
       return {
         id: user.id,
         name: user.name,

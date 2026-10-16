@@ -1,6 +1,6 @@
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
-import { access } from "node:fs/promises";
+import { getForecastModelReadiness } from "@/lib/database-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,12 +26,9 @@ export async function GET(): Promise<Response> {
     database = "ready";
   }
 
-  let model: "available" | "unavailable" = "unavailable";
-  if (process.env.ML_MODEL_PATH) {
-    try { await access(process.env.ML_MODEL_PATH); model = "available"; } catch { /* availability is reported separately */ }
-  }
+  const model = await getForecastModelReadiness();
   const ready = database === "ready";
-  return Response.json({ status: ready ? "ready" : "not_ready", dependencies: { database, model } }, {
+  return Response.json({ status: ready ? "ready" : "not_ready", dependencies: { database, forecastModel: model } }, {
     status: ready ? 200 : 503,
     headers: { "Cache-Control": "no-store" },
   });

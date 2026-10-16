@@ -5,6 +5,15 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const standalone = path.join(projectRoot, ".next", "standalone");
+
+function resolveStandaloneDatabaseUrl(databaseUrl) {
+  if (!databaseUrl?.startsWith("file:")) return databaseUrl;
+  const separator = databaseUrl.indexOf("?");
+  const rawPath = databaseUrl.slice("file:".length, separator < 0 ? undefined : separator);
+  const query = separator < 0 ? "" : databaseUrl.slice(separator);
+  if (path.isAbsolute(rawPath)) return databaseUrl;
+  return `file:${path.resolve(projectRoot, "prisma", rawPath)}${query}`;
+}
 await mkdir(path.join(standalone, ".next"), { recursive: true });
 await cp(path.join(projectRoot, ".next", "static"), path.join(standalone, ".next", "static"), { recursive: true });
 await cp(path.join(projectRoot, "public"), path.join(standalone, "public"), { recursive: true });
@@ -25,9 +34,18 @@ if (process.env.DATA_MODE === "sqlite" && process.env.RUN_DB_MIGRATIONS !== "fal
   if (exitCode !== 0) process.exit(Number(exitCode));
 }
 
+const serverEnv = { ...process.env };
+if (serverEnv.DATA_MODE === "sqlite") {
+  serverEnv.DATABASE_URL = resolveStandaloneDatabaseUrl(serverEnv.DATABASE_URL);
+  for (const key of ["ML_MODEL_PATH", "ML_EVALUATION_PATH", "LOCAL_STORAGE_DIR"]) {
+    const value = serverEnv[key];
+    if (value && !path.isAbsolute(value)) serverEnv[key] = path.resolve(projectRoot, value);
+  }
+}
+
 const server = spawn(process.execPath, ["server.js"], {
   cwd: standalone,
-  env: { ...process.env, NODE_ENV: "production" },
+  env: { ...serverEnv, NODE_ENV: "production" },
   stdio: "inherit",
 });
 server.on("exit", (code, signal) => {

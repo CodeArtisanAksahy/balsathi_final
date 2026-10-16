@@ -45,6 +45,7 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [passwordHelp, setPasswordHelp] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -180,14 +181,13 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
         </div>
 
         <div className="flex items-center justify-between text-sm">
-          <label className="flex items-center gap-2 text-stone-600 cursor-pointer">
-            <input type="checkbox" className="accent-forest w-4 h-4 rounded" defaultChecked />
-            Remember me
-          </label>
-          <button type="button" className="text-forest hover:underline font-medium">
-            Forgot password?
+          <span className="text-xs text-stone-500">Session expires automatically for your security.</span>
+          <button type="button" onClick={() => setPasswordHelp((visible) => !visible)} className="text-forest hover:underline font-medium">
+            Password help
           </button>
         </div>
+
+        {passwordHelp && <div role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Self-service password reset is unavailable because email delivery is not configured. Contact your organization administrator to update your password.</div>}
 
         {error && (
           <div className="rounded-xl bg-risk-red-light text-risk-red text-sm px-3 py-2">{error}</div>

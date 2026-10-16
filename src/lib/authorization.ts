@@ -17,7 +17,8 @@ export type Permission =
   | "reports:read"
   | "reports:create"
   | "admin:read"
-  | "admin:write";
+  | "admin:write"
+  | "accounts:manage";
 
 export class ApiError extends Error {
   constructor(
@@ -63,6 +64,7 @@ const permissions: Record<AppRole, readonly Permission[]> = {
     "reports:read",
     "reports:create",
     "admin:read",
+    "accounts:manage",
   ],
   DISTRICT_ADMIN: [
     "children:read",
@@ -81,6 +83,7 @@ const permissions: Record<AppRole, readonly Permission[]> = {
     "reports:create",
     "admin:read",
     "admin:write",
+    "accounts:manage",
   ],
 };
 

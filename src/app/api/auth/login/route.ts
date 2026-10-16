@@ -4,14 +4,15 @@ import { createSession, getDemoUserByEmail, persistSession, verifyPassword } fro
 import { loginSchema } from "@/lib/validation";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
-import { enforceRateLimit } from "@/lib/request-security";
+import { assertSameOrigin, enforceConfiguredRateLimit } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    enforceRateLimit(request, "login", config.rateLimit.authMaxPerMinute);
+    assertSameOrigin(request);
+    await enforceConfiguredRateLimit(request, "login", config.rateLimit.authMaxPerMinute);
     const input = loginSchema.parse(await readJson(request));
     const user = config.dataMode === "sqlite"
       ? await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } })
