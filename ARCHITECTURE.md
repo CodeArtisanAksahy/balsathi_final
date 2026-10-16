@@ -55,4 +55,4 @@ Rules are explainable demonstrations, not validated screening. Missing records r
 
 ## Operational boundary
 
-SQLite provides local durable persistence when its file is on a persistent disk, but the app does not include a production provisioning, backup/restore, retention/deletion, multi-instance coordination, or deployment security workflow. Those gaps are listed in [SECURITY.md](SECURITY.md).
+SQLite provides local durable persistence when its file is on a persistent disk. Authorized center/account provisioning and durable session revocation are implemented for SQLite, but the first district-admin bootstrap, production backup/restore, retention/deletion, multi-instance coordination, and deployment security workflows remain incomplete. Those limits are listed in [SECURITY.md](SECURITY.md).

@@ -15,7 +15,7 @@ export function AddChildForm({
 }: {
   session: SessionUser;
   centers: Array<{ id: string; name: string }>;
-  workers: Array<{ id: string; name: string }>;
+  workers: Array<{ id: string; name: string; centerIds: string[] }>;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export function AddChildForm({
     dateOfBirth: "",
     gender: "UNSPECIFIED" as string,
     centerId: centers[0]?.id ?? "",
-    assignedWorkerId: workers[0]?.id ?? "",
+    assignedWorkerId: workers.find((worker) => worker.centerIds.includes(centers[0]?.id ?? ""))?.id ?? "",
     primaryLanguage: "en" as string,
     emergencyContactName: "",
     emergencyContactPhone: "",
@@ -102,15 +102,19 @@ export function AddChildForm({
           </div>
           <div>
             <label className="label">Center *</label>
-            <select className="input" value={form.centerId} onChange={(e) => update("centerId", e.target.value)} required>
+            <select className="input" value={form.centerId} onChange={(e) => {
+              const centerId = e.target.value;
+              setForm((current) => ({ ...current, centerId, assignedWorkerId: workers.find((worker) => worker.centerIds.includes(centerId))?.id ?? "" }));
+            }} required>
               {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="label">Assigned Worker *</label>
             <select className="input" value={form.assignedWorkerId} onChange={(e) => update("assignedWorkerId", e.target.value)} required>
-              {workers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {workers.filter((worker) => worker.centerIds.includes(form.centerId)).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+            {centers.length > 0 && workers.filter((worker) => worker.centerIds.includes(form.centerId)).length === 0 && <p className="mt-1 text-sm text-risk-red">No active workers are assigned to this center. Ask an administrator to assign a worker before registering a child.</p>}
           </div>
           <div>
             <label className="label">Primary Language</label>

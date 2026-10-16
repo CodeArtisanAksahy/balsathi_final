@@ -21,7 +21,7 @@ import { formatDateTime, ageLabel } from "@/lib/utils";
 import { DomainTree } from "./domain-tree";
 import { AreaChartCard } from "./area-chart-card";
 import { useStoreSelector } from "@/hooks/use-store";
-import { getDashboardData, getChildRisks } from "@/lib/selectors";
+import { getDashboardData, getRecentObservationChildren } from "@/lib/selectors";
 
 type DashboardData = Awaited<ReturnType<typeof import("@/lib/data").getDashboardData>>;
 
@@ -38,11 +38,7 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
 
   // Read live data from the reactive store
   const data = useStoreSelector((state) => getDashboardData(state, session));
-  // Also get child names for attention list
-  const attentionChildren = useStoreSelector((state) => {
-    const children = getDashboardData(state, session).attentionChildren;
-    return children.slice(0, 3);
-  });
+  const recentObservationChildren = useStoreSelector((state) => getRecentObservationChildren(state, session));
 
   const quickActions = isParent
     ? [
@@ -55,8 +51,8 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
     : [
         { label: "Voice Observation", icon: Mic, href: "/observations/voice", color: "bg-forest/10 text-forest" },
         { label: "Add Photo", icon: Camera, href: "/observations/photo", color: "bg-purple-100 text-purple-600" },
-        { label: "Milestone Check", icon: CheckSquare, href: "/children", color: "bg-amber-100 text-amber-600" },
-        { label: "Growth Entry", icon: TrendingUp, href: "/children", color: "bg-blue-100 text-blue-600" },
+        { label: "Milestone Check", icon: CheckSquare, href: "/milestones", color: "bg-amber-100 text-amber-600" },
+        { label: "Growth Entry", icon: TrendingUp, href: "/growth", color: "bg-blue-100 text-blue-600" },
         { label: "Reports", icon: FileText, href: "/reports", color: "bg-rose-100 text-rose-600" },
       ];
 
@@ -132,7 +128,7 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
             <Link href="/children" className="text-xs text-forest font-medium hover:underline">View All</Link>
           </div>
           <div className="space-y-3">
-            {(data.attentionChildren.length > 0 ? data.attentionChildren.slice(0, 3) : data.recentObservations.slice(0, 3).map((o) => ({ child: (o as any).child, risks: [] }))).map((item: any, i: number) => (
+            {(data.attentionChildren.length > 0 ? data.attentionChildren.slice(0, 3) : recentObservationChildren).map((item, i) => (
               <Link key={i} href={`/children/${item.child?.id ?? "#"}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-stone-50 transition">
                 <div className="w-10 h-10 rounded-full bg-forest/15 flex items-center justify-center text-forest font-semibold text-sm flex-shrink-0">
                   {item.child?.fullName?.slice(0, 2).toUpperCase() ?? "??"}

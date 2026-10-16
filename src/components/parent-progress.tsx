@@ -15,15 +15,13 @@ import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getChildProfile as selectChildProfile, getAuthorizedChildren } from "@/lib/selectors";
 
-type Profile = Awaited<ReturnType<typeof import("@/lib/data").getChildProfile>>;
-
 export function ParentProgressView({
   session,
   profile: initialProfile,
   children: _initialChildren,
 }: {
   session: SessionUser;
-  profile: Profile;
+  profile: { child: { id: string } };
   children: Array<{ id: string; fullName: string }>;
 }) {
   const childId = initialProfile.child.id;

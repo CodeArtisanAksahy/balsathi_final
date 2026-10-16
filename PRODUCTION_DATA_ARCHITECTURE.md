@@ -20,7 +20,7 @@ npm run db:migrate:deploy
 DATA_MODE=sqlite DATABASE_URL='file:./dev.db' npm run dev
 ```
 
-`prisma/seed.ts` seeds milestone definitions only. User/center/child account provisioning is not included. Back up the SQLite file while the app is stopped for simple local copies; production deployments need a SQLite-aware backup mechanism and tested restore procedure.
+No seed script is included, so migrations do not create users, children, or milestone definitions. Authorized center/account provisioning is available to existing administrators, but the first district administrator must be bootstrapped through a controlled deployment process. Back up the SQLite file while the app is stopped for simple local copies; production deployments need a SQLite-aware backup mechanism and tested restore procedure.
 
 ## Database-backed API paths
 
@@ -72,7 +72,7 @@ The existing PostgreSQL database is not queried or migrated by the SQLite workfl
 
 ## Remaining work
 
-- No production provisioning, password reset, or durable session revocation flow.
+- First district-administrator bootstrap and email-based password reset are not implemented. Session revocation and single-host persistent login rate limits use additive SQLite tables; multi-instance deployments need shared storage and coordination.
 - Some messaging, uploads, recommendations, and chatbot data paths do not have complete SQLite persistence.
 - SQLite needs a single writer/application instance and a persistent local volume; no multi-replica storage or coordination is provided.
 - Backups, restore drills, retention/deletion, external database migration, operational metrics, and security/privacy review need explicit procedures.

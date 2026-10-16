@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Settings as SettingsIcon, Globe, Shield, Database, Save, Loader2,
+  Settings as SettingsIcon, Globe, Shield, Database,
 } from "lucide-react";
 import type { SessionUser, AppLocale } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
@@ -14,29 +14,29 @@ import { cn } from "@/lib/utils";
 export default function AdminSettingsPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
   const [dataMode, setDataMode] = useState<"demo" | "sqlite">("demo");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
-  useState(() => {
-    apiFetch<SessionUser | null>("/api/auth/session").then(setSession);
-    getConfiguredDataMode().then((mode) => setDataMode(mode === "sqlite" ? "sqlite" : "demo"));
-  });
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([apiFetch<SessionUser | null>("/api/auth/session"), getConfiguredDataMode()]).then(([currentSession, mode]) => {
+      if (!mounted) return;
+      setSession(currentSession);
+      setDataMode(mode === "sqlite" ? "sqlite" : "demo");
+    }).catch((loadError) => { if (mounted) setError(loadError instanceof Error ? loadError.message : "Unable to load settings."); });
+    return () => { mounted = false; };
+  }, []);
 
   if (!session) return null;
 
   async function changeLocale(locale: AppLocale) {
-    await apiFetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
-    router.refresh();
-  }
-
-  function save() {
-    setSaving(true);
-    setTimeout(() => {
-      setSaving(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }, 500);
+    setError("");
+    try {
+      await apiFetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
+      router.refresh();
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : "Unable to update language.");
+    }
   }
 
   return (
@@ -48,6 +48,7 @@ export default function AdminSettingsPage() {
         <h1 className="text-2xl font-bold text-stone-800">System Settings</h1>
       </div>
       <p className="text-stone-500 text-sm">Configure system-wide settings and preferences.</p>
+      {error && <div role="alert" className="rounded-xl bg-risk-red-light p-3 text-sm text-risk-red">{error}</div>}
 
       {/* Data mode */}
       <div className="card p-6 space-y-4">
@@ -77,7 +78,7 @@ export default function AdminSettingsPage() {
       <div className="card p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Globe className="w-5 h-5 text-forest" />
-          <h3 className="font-semibold text-stone-800">Default Language</h3>
+          <h3 className="font-semibold text-stone-800">Account Language</h3>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {appLocales.map((loc) => (
@@ -106,31 +107,25 @@ export default function AdminSettingsPage() {
           <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
             <div>
               <p className="text-sm font-medium text-stone-800">Session Timeout</p>
-              <p className="text-xs text-stone-500">12 hours (configured)</p>
+              <p className="text-xs text-stone-500">Controlled by the deployment session lifetime setting; not editable here.</p>
             </div>
           </div>
           <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
             <div>
               <p className="text-sm font-medium text-stone-800">Password Policy</p>
-              <p className="text-xs text-stone-500">Minimum 8 characters</p>
+              <p className="text-xs text-stone-500">Provisioned account passwords require at least 12 characters.</p>
             </div>
           </div>
           <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
             <div>
-              <p className="text-sm font-medium text-stone-800">Demo Authentication</p>
-              <p className="text-xs text-stone-500">Bcrypt + JWT (HTTP-only cookie)</p>
+              <p className="text-sm font-medium text-stone-800">Authentication</p>
+              <p className="text-xs text-stone-500">SQLite accounts use bcrypt hashes and signed HTTP-only session cookies with durable revocation records. Demo mode is not production authentication.</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button onClick={save} disabled={saving} className="btn-primary">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save Settings
-        </button>
-        {saved && <span className="text-sm text-forest">Saved successfully</span>}
-      </div>
+      <p className="text-xs text-stone-500">Only the language preference can be changed from this page. Runtime and security settings must be managed through deployment configuration.</p>
     </div>
   );
 }

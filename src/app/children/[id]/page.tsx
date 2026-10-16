@@ -3,6 +3,7 @@ import { getChildProfile } from "@/lib/data";
 import { ChildProfileView } from "@/components/child-profile";
 import { config } from "@/lib/config";
 import { getDatabaseChildProfile } from "@/lib/database-service";
+import { resolveProfileChildId } from "@/lib/child-profile-utils";
 
 export default async function ChildProfilePage({
   params,
@@ -13,7 +14,8 @@ export default async function ChildProfilePage({
   if (!session) return null;
   const { id } = await params;
   const profile = config.dataMode === "sqlite"
-    ? await getDatabaseChildProfile(session, id) as unknown as Awaited<ReturnType<typeof getChildProfile>>
+    ? await getDatabaseChildProfile(session, id)
     : getChildProfile(session, id);
-  return <ChildProfileView session={session} profile={profile} />;
+  const childId = resolveProfileChildId(profile);
+  return <ChildProfileView session={session} profile={{ child: { id: childId } }} />;
 }

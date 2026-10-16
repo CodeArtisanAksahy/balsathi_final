@@ -19,8 +19,8 @@ export function getConfiguredDataMode(): Promise<string> {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const res = await fetch(path, {
-    headers: { ...(isFormData ? {} : { "Content-Type": "application/json" }), ...(init?.headers ?? {}) },
     ...init,
+    headers: { ...(isFormData ? {} : { "Content-Type": "application/json" }), ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

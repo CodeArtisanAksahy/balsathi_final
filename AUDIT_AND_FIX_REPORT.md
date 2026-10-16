@@ -5,6 +5,8 @@
 
 > **Latest status — critical features implementation, 16 October 2026:** SQLite remains active and existing database files were not reset. This phase added authorized center/account provisioning, durable session revocation, persistent single-host login rate limiting, model readiness validation, workflow regression coverage, and standalone relative SQLite path resolution. See the final dated section for exact results and limitations. Earlier status entries below are historical and have been superseded where they conflict with newer updates.
 
+> **Latest status — runtime follow-up, 16 October 2026:** Browser testing against an isolated SQLite test database exercised admin, worker, and linked parent flows. This follow-up fixed the child profile SQLite response shape, scoped registration options, request header handling, parent center context, and misleading placeholder admin screens. The production database was not modified. Full details and refreshed verification results are appended below.
+
 ## Executive summary
 
 **Current configuration:** SQLite is the active persistence mode. Authorized account/center provisioning for district and center administrators, workers, and linked parent accounts is implemented; durable revocation, single-host persistent login throttling, and model readiness checks are also implemented. Unit, API integration, E2E smoke, ML tests, typecheck, lint, and production build pass. This does not establish production readiness: first district administrator bootstrap is controlled/out of band, password reset/email, media transcription, durable offline sync, multi-instance rate limiting, valid real-history forecasting, production backup operations, and container startup remain incomplete or infrastructure-dependent. Earlier phases below are historical and are superseded by newer status sections.
@@ -118,6 +120,49 @@ The local PostgreSQL database was previously inspected read-only: core `Center`,
 2. Run the read-only integration mode with `TEST_API_BASE_URL` and `TEST_FORECAST_ADMIN_USER_ID` against that deployment. Confirm readiness, scoped dashboard, login, child CRUD/observation workflows, and database-backed reports.
 3. Only after at least 24 consecutive validated real observation months exist, export aggregate counts, train/evaluate chronologically against the naive baseline, and configure the artifact plus evaluation metadata.
 4. Implement distributed login/sensitive-route rate limits, durable session revocation, complete origin policy, and password reset only when email delivery infrastructure is configured.
+
+## Runtime inspection and workflow fixes — 16 October 2026
+
+### Runtime scope and evidence
+
+- Ran the Next.js development server on `127.0.0.1:3000` with `DATA_MODE=sqlite`, `DATABASE_URL=file:./test.db`, a test-only auth secret, and `APP_ORIGIN=http://localhost:3000`. All browser-created records were written only to `prisma/test.db`; the configured `prisma/dev.db` was not reset or modified.
+- Confirmed `prisma/dev.db` has 3 migrations applied and up to date. Before and after the browser run it contained no application fixture accounts or children. The isolated test database contained only the temporary QA center, accounts, child, observation, growth record, report, session/rate-limit/idempotency/audit entries, and old leaked integration test fixtures. These test fixtures were removed by their exact IDs / test prefixes; test DB application table counts then returned to zero.
+- Through the browser, verified login rejects invalid credentials, admin dashboard and center/account pages load, center admin creates a worker and child, edits worker activation, records observation and growth data, generates a report, and parent login sees the linked child and scoped progress. Unauthenticated admin navigation redirects to login; a worker visiting an admin route redirects to the dashboard.
+- Confirmed unsupported email password reset explicitly reports unavailable. Admin notifications, content catalog, AI rules, and privacy/retention controls no longer show sample records or claim fake saves; unsupported features are labeled unavailable. Milestones with no configured definitions show an explicit empty state. A cross-origin/non-configured host request was rejected by the origin check.
+- An initial child-profile render failed because the UI assumed demo API nesting while SQLite returned the Prisma child object directly. After adapting the profile ID resolution, the profile loaded. A child-create attempt exposed `apiFetch` dropping its default JSON header when custom headers were supplied; fixed header merge order and successfully retried. Browser checks also exposed missing parent center context and “Unknown” recent observation names; both now resolve from authorized state.
+
+### Code and regression changes
+
+- SQLite child registration now loads authorized centers and active workers from the database, filters the worker list to the selected center, and requires `children:create`. Parent users cannot use this workflow.
+- Profile pages resolve the child ID from both raw database and demo response shapes. Dashboard recent activity resolves the child name and quick actions navigate to real growth/milestone routes.
+- `apiFetch` retains both default JSON content type and supplied idempotency headers. Added a focused fetch test and profile/dashboard selector coverage.
+- The admin layout now enforces login and admin role checks before rendering child admin pages.
+- Replaced misleading mock/placeholder admin data with live scoped SQLite quality and consent counts or explicit unavailable states. Settings only presents the account locale action it actually persists.
+- Added an E2E unauthenticated admin guard test. The SQLite integration fixture harness now removes and asserts cleanup of generated report records as well as other test records.
+
+### Current verification
+
+| Command / check | Outcome |
+| --- | --- |
+| Browser runtime workflow on isolated SQLite `test.db` | PASS for the flows listed above; temporary fixtures removed. |
+| `npm test` | PASS — 13 Node tests and 26 Vitest tests, 39 total. |
+| `npm run typecheck` | PASS after running `npx next typegen` to replace stale development route types. |
+| `npm run lint` | PASS — 0 errors, 52 warnings (pre-existing unused imports and one image optimization warning remain). |
+| `npm run db:validate` | PASS — Prisma schema valid. |
+| `npx prisma migrate status` | PASS — 3 migrations current on configured SQLite `dev.db`. |
+| `python3 -m pytest -q ml/tests` | PASS — 68 passed, 2 skipped. |
+| `npm run build` | PASS — Next.js 16 production build completed. |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 production dependency vulnerabilities. |
+| `git diff --check` | PASS. |
+| Docker availability | BLOCKED — Docker CLI 28.1.1 is installed, but daemon socket `/Users/akshaythakur/.docker/run/docker.sock` is not accepting connections. No Docker build was run. |
+| Full SQLite HTTP integration harness, Playwright E2E, restart persistence, full dependency audit | NOT YET RUN in this follow-up. Do not treat browser coverage as their substitute. |
+
+### Remaining limitations and readiness
+
+- The forecast API was previously verified to reject requests safely when no valid evaluated artifact or sufficient history is available. This run did not train a model or claim predictive accuracy. No production dataset was queried or exported. The configured local SQLite application database had no test users or children; real historical observation availability remains unverified for other deployment data stores.
+- Password reset remains unavailable without configured email delivery. Offline capture/sync, media upload/transcription, persistent catalog/AI-rule configuration, and notifications remain unavailable or incomplete. The SQLite runtime UI exercise does not establish all child workflow routes or all parent/worker features as complete.
+- Multi-instance distributed throttling, comprehensive mutation-origin coverage, production backups/restore, retention/deletion operations, telemetry, and an independent security review remain necessary before deployment.
+- **Readiness:** local/internal verification only. These results do not establish production readiness or real-world predictive performance.
 5. Implement secure offline storage and idempotent server synchronization before re-enabling offline capture.
 6. Resolve ESLint dependency advisories without framework downgrade and migrate Prisma config before Prisma 7.
 

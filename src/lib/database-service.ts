@@ -25,6 +25,23 @@ export function childScopeWhere(session: SessionUser): Prisma.ChildWhereInput {
   return { active: true, centerId: { in: session.centerIds } };
 }
 
+export async function getDatabaseChildRegistrationOptions(session: SessionUser) {
+  if (session.role === "PARENT") throw new ApiError(403, "FORBIDDEN", "Parents cannot register children.");
+  const centerWhere = session.role === "DISTRICT_ADMIN" ? { active: true } : { active: true, id: { in: session.centerIds } };
+  const [centers, workerRows] = await Promise.all([
+    prisma.center.findMany({ where: centerWhere, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { active: true, role: "WORKER" }, select: { id: true, name: true, centerIds: true }, orderBy: { name: "asc" } }),
+  ]);
+  const visibleCenterIds = new Set(centers.map((center) => center.id));
+  const workers = workerRows.flatMap((worker) => {
+    const assignedCenterIds = Array.isArray(worker.centerIds)
+      ? worker.centerIds.filter((centerId): centerId is string => typeof centerId === "string" && visibleCenterIds.has(centerId))
+      : [];
+    return assignedCenterIds.length ? [{ id: worker.id, name: worker.name, centerIds: assignedCenterIds }] : [];
+  });
+  return { centers, workers };
+}
+
 async function loadVerifiedModelEvaluation(artifact: string): Promise<Record<string, unknown> | null> {
   try {
     await access(artifact);

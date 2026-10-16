@@ -204,6 +204,13 @@ export function getDashboardData(state: DemoData, session: SessionUser) {
   };
 }
 
+export function getRecentObservationChildren(state: DemoData, session: SessionUser, limit = 3) {
+  return getDashboardData(state, session).recentObservations.slice(0, limit).map((observation) => ({
+    child: state.children.find((candidate) => candidate.id === observation.childId),
+    risks: [],
+  }));
+}
+
 /**
  * Observation trend data grouped by month.
  */

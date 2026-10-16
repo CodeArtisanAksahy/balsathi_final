@@ -112,7 +112,12 @@ export function MilestoneJourney({
       </div>
 
       {/* Timeline */}
-      <div className="space-y-6">
+      {milestoneDefinitions.length === 0 ? (
+        <div role="status" className="card p-8 text-center text-stone-600">
+          <p className="font-medium">Milestone tracking is not configured.</p>
+          <p className="mt-2 text-sm text-stone-500">No active milestone definitions are available in this database. Ask an administrator to configure approved program definitions before recording assessments.</p>
+        </div>
+      ) : <div className="space-y-6">
         {brackets.map((bracket) => {
           const bracketMilestones = milestoneDefinitions.filter(
             (m) => m.minAgeMonths >= bracket.min && m.minAgeMonths < bracket.max,
@@ -160,7 +165,7 @@ export function MilestoneJourney({
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

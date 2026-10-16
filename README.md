@@ -29,7 +29,7 @@ npm run db:migrate:deploy
 npm run dev
 ```
 
-The checked-in SQLite migration creates a fresh database. The repository has no seed or user-provisioning workflow; database accounts and centers must be provisioned through a controlled process before SQLite login is usable.
+The checked-in SQLite migrations create the schema without fake users or children. A district administrator can provision centers and accounts through the authenticated admin screens/API. The first district administrator must be bootstrapped through a controlled deployment process; no default production credentials are created. Initial passwords must be delivered through an approved secure process. Self-service password reset is unavailable until email delivery is configured.
 
 Validate changes with `npm run db:validate`, `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`.
 
@@ -71,4 +71,4 @@ The forecast API and admin chart use aggregate monthly observation counts. They 
 
 ## Remaining production work
 
-SQLite mode supports the tested child, observation, authentication, scoping, and forecast-history flows. Recommendation, messaging, uploads, and chatbot persistence are not all implemented against the database. User provisioning, password reset/revocation, retention/deletion, backup/restore operations, multi-instance deployment, clinical review, and privacy/security review remain necessary before real-world use.
+SQLite mode supports tested child, observation, growth, report, authentication, scoping, and account/center provisioning flows. Recommendation, messaging, uploads, transcription, notification delivery, and chatbot persistence are not all implemented against the database. First administrator bootstrap, password reset, retention/deletion, production backup/restore operations, multi-instance deployment, clinical review, and privacy/security review remain necessary before real-world use.

@@ -23,7 +23,7 @@ export async function GET() {
     const centerIds = [...new Set(children.map((child) => child.centerId))];
     const linkedParentIds = [...new Set(children.flatMap((child) => child.guardianLinks.map((link) => link.guardian.linkedUserId).filter((id): id is string => Boolean(id))))];
     const [centers, allUsers, observations, growthMeasurements, milestoneAssessments, milestoneDefinitions, risks, followUps, recommendations, messages, reports, attachments, auditLogs] = await prisma.$transaction([
-      prisma.center.findMany({ where: session.role === "DISTRICT_ADMIN" ? { active: true } : { id: { in: session.centerIds } } }),
+      prisma.center.findMany({ where: session.role === "DISTRICT_ADMIN" ? { active: true } : { id: { in: [...new Set([...session.centerIds, ...centerIds])] } } }),
       prisma.user.findMany({ where: { OR: [{ id: session.id }, { role: "WORKER" }, { id: { in: linkedParentIds } }] } }),
       prisma.observation.findMany({ where: { childId: { in: ids } } }),
       prisma.growthMeasurement.findMany({ where: { childId: { in: ids } } }),

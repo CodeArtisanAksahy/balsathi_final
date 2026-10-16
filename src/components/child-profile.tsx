@@ -25,7 +25,7 @@ type Profile = Awaited<ReturnType<typeof import("@/lib/data").getChildProfile>>;
 
 const tabs = ["Overview", "Observations", "Milestones", "Growth", "Reports"] as const;
 
-export function ChildProfileView({ session, profile: _initialProfile }: { session: SessionUser; profile: Profile }) {
+export function ChildProfileView({ session, profile: _initialProfile }: { session: SessionUser; profile: { child: { id: string } } }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
   const childId = _initialProfile.child.id;
   const t = getMessages(session.preferredLanguage);

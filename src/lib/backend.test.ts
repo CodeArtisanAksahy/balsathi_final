@@ -3,6 +3,8 @@ import test from "node:test";
 import { createDemoData } from "./demo-data";
 import { resetDemoStore } from "./demo-store";
 import { assertChildAccess, getAuthorizedChildren } from "./data";
+import { getRecentObservationChildren } from "./selectors";
+import { resolveProfileChildId } from "./child-profile-utils";
 import { verifyPassword } from "./auth";
 import type { SessionUser } from "./domain";
 
@@ -62,6 +64,19 @@ test("a parent cannot retrieve an unlinked child", () => {
 test("a worker cannot retrieve a child outside their center scope", () => {
   const worker = sessionFor("worker-1");
   assert.throws(() => assertChildAccess(worker, "child-3"), /NOT_FOUND/);
+});
+
+test("recent dashboard observations resolve their child names from state", () => {
+  const state = createDemoData();
+  const session = sessionFor("worker-1");
+  const recent = getRecentObservationChildren(state, session);
+  assert.ok(recent.length > 0);
+  for (const item of recent) assert.ok(item.child, "recent observations should resolve to a scoped child record");
+});
+
+test("child profile routes resolve IDs from demo and Prisma database result shapes", () => {
+  assert.equal(resolveProfileChildId({ child: { id: "demo-child" } }), "demo-child");
+  assert.equal(resolveProfileChildId({ id: "sqlite-child" }), "sqlite-child");
 });
 
 test("demo credentials accept the documented quick-login password and reject an invalid password", async () => {

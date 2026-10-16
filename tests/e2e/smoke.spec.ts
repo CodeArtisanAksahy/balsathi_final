@@ -27,3 +27,9 @@ test("forecast endpoint rejects unauthenticated access", async ({ request, baseU
     expect(JSON.stringify(body)).not.toMatch(/fullname|childid|passwordhash/i);
   }
 });
+
+test("unauthenticated browser is redirected away from admin pages", async ({ page }) => {
+  await page.goto("/admin/notifications");
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: /balsathi ai/i })).toBeVisible();
+});

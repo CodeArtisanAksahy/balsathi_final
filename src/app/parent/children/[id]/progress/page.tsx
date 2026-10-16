@@ -3,6 +3,7 @@ import { getChildProfile, getAuthorizedChildren } from "@/lib/data";
 import { ParentProgressView } from "@/components/parent-progress";
 import { config } from "@/lib/config";
 import { getDatabaseChildProfile } from "@/lib/database-service";
+import { resolveProfileChildId } from "@/lib/child-profile-utils";
 
 export default async function ParentChildProgressPage({
   params,
@@ -13,8 +14,9 @@ export default async function ParentChildProgressPage({
   if (!session) return null;
   const { id } = await params;
   const profile = config.dataMode === "sqlite"
-    ? await getDatabaseChildProfile(session, id) as unknown as Awaited<ReturnType<typeof getChildProfile>>
+    ? await getDatabaseChildProfile(session, id)
     : getChildProfile(session, id);
   const children = getAuthorizedChildren(session);
-  return <ParentProgressView session={session} profile={profile} children={children} />;
+  const childId = resolveProfileChildId(profile);
+  return <ParentProgressView session={session} profile={{ child: { id: childId } }} children={children} />;
 }

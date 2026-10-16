@@ -6,6 +6,7 @@ import { config } from "@/lib/config";
 import { forecastDashboardSchema } from "@/lib/forecast-contract";
 import { prisma } from "@/lib/prisma";
 import { enforceConfiguredRateLimit } from "@/lib/request-security";
+import { getDatabaseChildRegistrationOptions } from "@/lib/database-service";
 
 function requireTestDatabase() {
   if (config.dataMode !== "sqlite") throw new Error("Run with DATA_MODE=sqlite.");
@@ -72,6 +73,11 @@ async function main() {
         activitiesEn: [], activitiesHi: [], activitiesMr: [],
       } });
     });
+
+    const registrationOptions = await getDatabaseChildRegistrationOptions({ id: adminId, name: "Integration Admin", email: `admin-${email}`, role: "CENTER_ADMIN", preferredLanguage: "en", centerIds: [centerId] });
+    assert.deepEqual(registrationOptions.centers.map((center) => center.id), [centerId]);
+    assert.deepEqual(registrationOptions.workers.map((worker) => worker.id), [workerId]);
+    await assert.rejects(() => getDatabaseChildRegistrationOptions({ id: parentId, name: "Integration Parent", email: `parent-${email}`, role: "PARENT", preferredLanguage: "en", centerIds: [] }), /Parents cannot register children/);
 
     const baseUrl = process.env.TEST_API_BASE_URL;
     assert.ok(baseUrl, "Set TEST_API_BASE_URL to the running local app.");
@@ -261,7 +267,7 @@ async function main() {
     const forecastError = await forecast.json();
     assert.ok(["MODEL_NOT_CONFIGURED", "MODEL_ARTIFACT_MISSING", "MODEL_EVALUATION_INVALID", "INSUFFICIENT_HISTORY"].includes(forecastError.error?.code), `Unexpected forecast failure: ${forecastError.error?.code}`);
 
-    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", persistent_rate_limit: "verified", expired_session: "rejected", durable_logout_revocation: "verified", deactivation_revocation: "verified", role_and_center_scope_refresh: "verified", disabled_account: "rejected", same_origin: "verified", center_isolation: "verified", parent_link_scope: "verified", center_and_account_provisioning: "verified", duplicate_account_rejected: "verified", child_registration_and_profile: "verified", observation_create_and_readback: "verified", growth_and_milestone_persistence: "verified", follow_up_tracking: "verified", report_generation_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
+    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", persistent_rate_limit: "verified", expired_session: "rejected", durable_logout_revocation: "verified", deactivation_revocation: "verified", role_and_center_scope_refresh: "verified", disabled_account: "rejected", same_origin: "verified", center_isolation: "verified", parent_link_scope: "verified", center_and_account_provisioning: "verified", child_registration_options_scope: "verified", duplicate_account_rejected: "verified", child_registration_and_profile: "verified", observation_create_and_readback: "verified", growth_and_milestone_persistence: "verified", follow_up_tracking: "verified", report_generation_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
   } finally {
     await prisma.$transaction(async (tx) => {
       const createdUserIds = (await tx.user.findMany({ where: { email: { contains: suffix } }, select: { id: true } })).map((user) => user.id);
@@ -271,6 +277,10 @@ async function main() {
       ] } });
       await tx.rateLimitBucket.deleteMany({ where: { bucketKey: { startsWith: `${rateLimitKey}:` } } });
       await tx.mLPrediction.deleteMany({ where: { modelName: "integration_test" } });
+      await tx.reportRecord.deleteMany({ where: { OR: [
+        { childId: { in: [childId, otherChildId, ...(registeredChildId ? [registeredChildId] : [])] } },
+        { centerId: { in: [centerId, otherCenterId, ...(provisionedCenterId ? [provisionedCenterId] : [])] } },
+      ] } });
       await tx.observation.deleteMany({ where: { childId: { in: [childId, otherChildId] } } });
       await tx.milestoneAssessment.deleteMany({ where: { childId: { in: [childId, otherChildId] } } });
       await tx.childGuardian.deleteMany({ where: { childId: { in: [childId, otherChildId] } } });
@@ -284,13 +294,14 @@ async function main() {
       if (provisionedCenterId) await tx.center.deleteMany({ where: { id: provisionedCenterId } });
       await tx.center.deleteMany({ where: { id: { in: [centerId, otherCenterId] } } });
     });
-    const [centers, users, children, observations] = await Promise.all([
+    const [centers, users, children, observations, reports] = await Promise.all([
       prisma.center.count({ where: { id: { in: [centerId, otherCenterId] } } }),
       prisma.user.count({ where: { id: { in: [workerId, adminId, parentId, otherAdminId] } } }),
       prisma.child.count({ where: { id: { in: [childId, otherChildId] } } }),
       prisma.observation.count({ where: { childId: { in: [childId, otherChildId] } } }),
+      prisma.reportRecord.count({ where: { centerId: { in: [centerId, otherCenterId, ...(provisionedCenterId ? [provisionedCenterId] : [])] } } }),
     ]);
-    assert.deepEqual({ centers, users, children, observations }, { centers: 0, users: 0, children: 0, observations: 0 }, "Temporary integration fixtures were not fully cleaned up.");
+    assert.deepEqual({ centers, users, children, observations, reports }, { centers: 0, users: 0, children: 0, observations: 0, reports: 0 }, "Temporary integration fixtures were not fully cleaned up.");
   }
 }
 
