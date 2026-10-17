@@ -33,3 +33,30 @@ test("unauthenticated browser is redirected away from admin pages", async ({ pag
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: /balsathi ai/i })).toBeVisible();
 });
+
+
+test("demo account can change language, sees honest support availability, and signs out", async ({ page, baseURL }) => {
+  const health = await page.request.get(`${baseURL}/api/health`);
+  const status = await health.json();
+  test.skip(status.mode !== "demo", "The end-to-end demo-account journey uses only isolated in-memory demo data.");
+
+  await page.goto("/login");
+  await page.locator('input[type="email"]').fill("admin@balsathi.demo");
+  await page.locator('input[type="password"]').fill("balsathi123");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText(/Notification preferences and delivery are not configured/)).toBeVisible();
+  await page.getByRole("button", { name: /मराठी/ }).click();
+  await expect.poll(async () => page.evaluate(async () => (await (await fetch("/api/auth/session")).json()).preferredLanguage)).toBe("mr");
+
+  await page.goto("/help");
+  await expect(page.getByText(/Support message delivery is not configured/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send Message" })).toHaveCount(0);
+
+  await page.goto("/settings");
+  await page.getByRole("button", { name: /Sign Out/ }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});

@@ -13,7 +13,6 @@ import {
   Baby,
   Building2,
   UserCheck,
-  UserPlus,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { domainLabel, getMessages } from "@/lib/i18n";

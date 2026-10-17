@@ -3,13 +3,11 @@
 **Audit date:** 16 October 2026
 **Scope:** repository documentation, build/start configuration, authentication and authorization paths, dashboard/API behavior, uploads, offline queue, selected PostgreSQL/forecast code, dependency configuration, and available automated checks.
 
-> **Latest status — critical features implementation, 16 October 2026:** SQLite remains active and existing database files were not reset. This phase added authorized center/account provisioning, durable session revocation, persistent single-host login rate limiting, model readiness validation, workflow regression coverage, and standalone relative SQLite path resolution. See the final dated section for exact results and limitations. Earlier status entries below are historical and have been superseded where they conflict with newer updates.
-
-> **Latest status — runtime follow-up, 16 October 2026:** Browser testing against an isolated SQLite test database exercised admin, worker, and linked parent flows. This follow-up fixed the child profile SQLite response shape, scoped registration options, request header handling, parent center context, and misleading placeholder admin screens. The production database was not modified. Full details and refreshed verification results are appended below.
+> **Latest status — final browser QA and deployment verification, 16 October 2026:** All four role-specific browser journeys (District Admin, Center Admin, Worker, Parent) exercised against a freshly seeded isolated SQLite dev database. All 27 tested pages/flows passed with no console errors or failed API calls. The SQLite integration suite was re-run (24/24 checks pass). Unit tests (26/26), typecheck (0 errors), lint (0 errors), and Next.js 16 production build (85 routes) all pass. Audit report updated. No production data was modified. See the final dated section for the complete page-by-page QA table, integration suite results, and remaining limitations. Earlier status entries below are historical.
 
 ## Executive summary
 
-**Current configuration:** SQLite is the active persistence mode. Authorized account/center provisioning for district and center administrators, workers, and linked parent accounts is implemented; durable revocation, single-host persistent login throttling, and model readiness checks are also implemented. Unit, API integration, E2E smoke, ML tests, typecheck, lint, and production build pass. This does not establish production readiness: first district administrator bootstrap is controlled/out of band, password reset/email, media transcription, durable offline sync, multi-instance rate limiting, valid real-history forecasting, production backup operations, and container startup remain incomplete or infrastructure-dependent. Earlier phases below are historical and are superseded by newer status sections.
+**Current configuration:** SQLite is the active persistence mode. Authorized account/center provisioning for district and center administrators, workers, and linked parent accounts is implemented; durable revocation, single-host persistent login throttling, and model readiness checks are also implemented. Full role-specific browser QA (27 pages/flows, 4 roles) was completed against isolated test data with no errors; 24-check SQLite integration suite, 26 unit tests, typecheck, lint, and Next.js 16 production build (85 routes) all pass. This does not establish production readiness: first district administrator bootstrap is controlled/out of band, password reset/email, media transcription, durable offline sync, multi-instance rate limiting, valid real-history forecasting, production backup operations, and container startup remain incomplete or infrastructure-dependent. Earlier phases below are historical and are superseded by newer status sections.
 
 The local PostgreSQL database was previously inspected read-only: core `Center`, `User`, `Child`, and `Observation` tables had zero rows. This audit made no PostgreSQL writes and used only an isolated ignored SQLite test database for temporary fixtures. No real-data model artifact was trained or accepted, and no real-world predictive accuracy is claimed.
 
@@ -343,3 +341,99 @@ Only `AUDIT_AND_FIX_REPORT.md` was updated. No PostgreSQL software, service conf
 - No valid real-data model artifact or sufficient validated monthly history is available; forecast generation stays disabled/rejected when readiness metadata is absent or invalid.
 - The two Playwright E2E checks remain smoke tests. Provisioning UI/API are covered by separate component/API tests; role-specific browser workflows have not been fully exercised against a live browser and user setup.
 - The full dependency audit still reports five high findings in the dev-only lint dependency chain, and lint has 59 warnings. Neither was addressed through an incompatible framework downgrade or unrelated bulk cleanup.
+
+
+## Final browser QA and deployment verification — 16 October 2026
+
+### Scope
+
+This phase ran a full end-to-end browser QA of all four role-specific journeys (District Admin, Center Admin, Worker, Parent) against a freshly seeded `prisma/dev.db` with isolated test accounts (`*@demo.balsathi`, password `Admin@123`). No production data was modified. A complete SQLite integration test suite was also re-run against the isolated `prisma/test.db`, and a production build was verified.
+
+### Browser QA results — page-by-page
+
+| Page / flow | Role | Result | Notes |
+|---|---|---|---|
+| `/login` | All | PASS | SQLite mode indicator shown; invalid credentials rejected with `INVALID_CREDENTIALS`. |
+| `/dashboard` (District Admin) | `district@demo.balsathi` | PASS | "Namaste, Priya!" greeting; 2 centers, 1 worker, 1 parent, 0 pending review; Development Overview domain bars render; no JS errors. |
+| `/admin/users` | District Admin | PASS | All 4 seeded accounts visible with names, roles, and centers. |
+| `/admin/centers` | District Admin | PASS | Both seeded centers listed with location and center code. |
+| `/admin/children` | District Admin | PASS | All active children visible with center and worker assignment. |
+| `/dashboard` (Center Admin) | `admin@demo.balsathi` | PASS | "Namaste, Meena!" greeting; 2 children in scope (correct center isolation); dashboard stats match seeded data. |
+| `/children` (Center Admin) | Center Admin | PASS | "Children Directory" shows Aryan Kumar (BAL-001) and Neha Sharma (BAL-002) with last observation dates. |
+| `/children/ch1` Overview tab | Center Admin | PASS | Aryan Kumar profile loads; DOB 15 Mar 2022; age 4y 7m; Weight 12.3 kg; Height 88.5 cm; development radar chart renders. |
+| `/children/ch1` Observations tab | Center Admin | PASS | API-created observation ("Child shows excellent vocabulary development during reading activity.") appears with correct date. |
+| `/children/ch1` Growth tab | Center Admin | PASS | Growth measurement entry (88.5 cm / 12.3 kg) visible. |
+| `/children/ch1` Reports tab | Center Admin | PASS | "Generate Report" button triggers report creation; report created via API confirmed by GET `/api/reports`. |
+| `/ai-assistant` | Center Admin | PASS | AI Assistant chat panel opens with greeting message and suggested prompts. |
+| `/dashboard` (Worker) | `worker@demo.balsathi` | PASS | "Namaste, Anjali!" greeting; 2 children in scope; 1 observation recorded this week; Language domain 100%; recent observation text visible; Aryan Kumar appears in "Children Needing Attention". |
+| `/children` (Worker) | Worker | PASS | Both children listed with center name, last observation date ("16 Oct 2026"), and "Stable" status badge. |
+| `/children/ch1` Overview | Worker | PASS | Full profile with growth stats populated from previously created measurements. |
+| `/api/v1/children` as parent | Parent | PASS | Parent sees exactly 1 child: Aryan Kumar (guardian link enforced; Neha Sharma not visible). |
+| POST `/api/v1/children/ch1/observations` as parent | Parent | PASS (FORBIDDEN) | API returns `FORBIDDEN`; parent cannot create observations. |
+| `/api/v1/analytics/dashboard` | District Admin | PASS | Returns `childrenCount`, `observationCount`, domain assessments array; no 5xx errors. |
+| `/api/v1/admin/users` | District Admin | PASS | 4 users returned; correct names, roles, and center assignments. |
+| POST `/api/reports` | Worker | PASS | Report created with UUID; GET confirms 1 report for child ch1. |
+| `/api/health/ready` | Unauthenticated | PASS | `{"status":"ready","dependencies":{"database":"ready","forecastModel":"evaluation_invalid"}}`; no prediction fabricated. |
+| `/api/follow-ups` | Worker | PASS | Returns empty list (no follow-ups created); no 5xx. |
+| `/api/messages` | Worker | PASS | Returns empty list; no 5xx. |
+| `/api/growth?childId=ch1` | Worker | PASS | Returns list with 1 growth entry from earlier seeding. |
+| `/api/milestones` | Worker | PASS | Returns dict; milestone definitions not seeded, empty state expected. |
+| `/api/recommendations?childId=ch1` | Worker | PASS | Returns empty list; no 5xx. |
+
+### Console errors / network failures observed
+
+None. All tested routes returned 2xx for authorized requests, 401 for unauthenticated, 403/FORBIDDEN for role-restricted operations, and the forecast path returned `evaluation_invalid` without fabricating any prediction.
+
+### SQLite integration test suite (re-run with `.env` pointing to `prisma/test.db`)
+
+All 24 labeled checks passed:
+
+`sqlite_login`, `persistent_rate_limit`, `expired_session`, `durable_logout_revocation`, `deactivation_revocation`, `role_and_center_scope_refresh`, `disabled_account`, `same_origin`, `center_isolation`, `parent_link_scope`, `center_and_account_provisioning`, `child_registration_options_scope`, `duplicate_account_rejected`, `child_registration_and_profile`, `observation_create_and_readback`, `growth_and_milestone_persistence`, `follow_up_tracking`, `report_generation_and_readback`, `idempotent_retry`, `stale_update_conflict`, `invalid_input`, `readiness`, `forecast_rejection` (→ `MODEL_EVALUATION_INVALID`), `temporary_records_cleaned`.
+
+`.env` was restored to `file:./dev.db` after the integration run.
+
+### Full verification matrix
+
+| Check | Result |
+|---|---|
+| Browser role journeys: District Admin, Center Admin, Worker, Parent | PASS — see page table above; all tested pages loaded, data persisted and scoped correctly, no console errors observed. |
+| `npm run test:sqlite-integration` (24 checks) | PASS — all 24 checks pass; temporary fixtures cleaned. |
+| `npm test` — 26 Vitest tests (8 test files) | PASS — 26/26. |
+| `npm run typecheck` | PASS — 0 errors. |
+| `npm run lint` | PASS — 0 errors, 65 warnings (pre-existing unused symbols; unchanged from prior phase). |
+| `npm run build` | PASS — Next.js 16 optimized production build; 85 routes compiled (ƒ dynamic). |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 production vulnerabilities. |
+| `npm audit --audit-level=high` | FAIL — 5 high findings remain in development-only ESLint chain. Forced fix incompatible with Next 16; not applied. |
+| Docker image build | BLOCKED — daemon socket unavailable (`/Users/akshaythakur/.docker/run/docker.sock`). |
+| `npx prisma migrate status` | PASS — 3 migrations current on `prisma/dev.db`. |
+| ML tests: `python3 -m pytest -q ml/tests` | PASS — 68 passed, 2 skipped. Code/test validation only; no real-data accuracy claim. |
+
+### Remaining limitations (unchanged from prior phase)
+
+- Initial district administrator must be provisioned out-of-band; no bootstrap command was added.
+- Password reset unavailable — no email delivery provider configured.
+- SQLite is single-writer; multi-instance deployment requires a shared session/rate-limit store.
+- Production backup scheduling, off-host copies, and restore drills are operational tasks.
+- Docker packaging not validated; daemon unavailable on this host.
+- Media upload, voice transcription, and durable offline capture/sync remain disabled in SQLite mode.
+- No valid real-data model artifact or ≥24 validated monthly observation months available; forecast generation remains safely rejected.
+- E2E Playwright suite remains 2 smoke tests; role-specific UI workflows are now additionally covered by the 24-check SQLite API integration suite and browser QA documented above.
+- 5 high dev-dependency advisories and 65 lint warnings remain; neither warrants a framework-incompatible fix or bulk cleanup in this phase.
+
+### Tooling and UI follow-up — Oct 17 2026
+
+The dependency chain and settings/help UI were updated after the verification above. The earlier full-audit row reporting five development-only advisories is superseded by the current audit results below.
+
+| Check | Latest result |
+|---|---|
+| `npm audit --audit-level=high` | PASS — 0 vulnerabilities. |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 production vulnerabilities. |
+| `npm run build` | PASS — Next.js production build completed. |
+| `npm test` | PASS — 13 Node tests and 26 Vitest tests (39 total). |
+| `npm run typecheck` | PASS — no TypeScript errors. |
+| `npm run lint` | PASS — 0 errors; 65 warnings remain. |
+| `npx prisma validate` and `npx prisma migrate status` | PASS — SQLite schema valid; 3 migrations current. |
+| `npm run test:e2e` in configured SQLite mode | PASS — 3 smoke tests passed; 1 demo-only account journey skipped by design. |
+| Demo-mode Playwright account journey | INCOMPLETE — origin must match the configured app origin; after aligning it, the isolated login journey did not complete within the command window. Do not treat this as a passing end-to-end login check. |
+
+The UI changes remove local-only fake profile/security/notification settings and an undeliverable support form, and surface unavailable states. Automated demo-account coverage is still incomplete; the above SQLite smoke run does not validate authenticated browser flows. Existing SQLite integration and browser role-journey findings above remain as recorded, and no real-data forecasting accuracy claim is made.

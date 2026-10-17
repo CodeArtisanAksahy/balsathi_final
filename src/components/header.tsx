@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Menu, Bell, Globe, LogOut } from "lucide-react";
 import { useState } from "react";
-import type { SessionUser, AppLocale } from "@/lib/domain";
+import type { SessionUser } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
 import { localeLabels } from "@/lib/i18n";
 import { cn } from "@/lib/utils";

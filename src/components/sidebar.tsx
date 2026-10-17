@@ -26,7 +26,6 @@ import {
   Brain,
   Database,
   Bell,
-  Globe,
   HeartPulse,
   Server,
   Lock,
@@ -101,7 +100,7 @@ export function Sidebar({
   return (
     <>
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onClose} />
+        <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 border-0 bg-black/40 p-0 lg:hidden" onClick={onClose} />
       )}
       <aside
         className={cn(

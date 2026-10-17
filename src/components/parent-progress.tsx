@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import {
-  ArrowLeft, Activity, CheckCircle2, Clock, Target, Calendar,
-  TrendingUp, Brain, MessageCircle, FileText,
+  ArrowLeft, Activity, CheckCircle2, Clock, Target,
+  TrendingUp,
 } from "lucide-react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
 } from "recharts";
-import type { SessionUser, Child, Observation, MilestoneAssessment, GrowthMeasurement, RiskAssessment, Recommendation } from "@/lib/domain";
+import type { SessionUser } from "@/lib/domain";
 import { developmentDomains } from "@/lib/domain";
 import { domainLabel, getMessages } from "@/lib/i18n";
 import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";

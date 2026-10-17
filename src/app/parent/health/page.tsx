@@ -3,9 +3,8 @@
 import { useState } from "react";
 import {
   Heart, Apple, Moon, Activity, Droplets, Sun, BookOpen,
-  ChevronDown, ChevronUp, Info, ShieldAlert,
+  ChevronDown, ChevronUp, ShieldAlert,
 } from "lucide-react";
-import type { SessionUser } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 
 const healthTopics = [

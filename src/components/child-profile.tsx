@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, AlertTriangle, Calendar, Scale, Ruler, Activity,
-  ClipboardList, CheckSquare, TrendingUp, FileText, Plus, Loader2,
+  ClipboardList, CheckSquare, FileText, Plus, Loader2,
 } from "lucide-react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,

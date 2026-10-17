@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { HelpCircle, MessageSquare, ChevronDown, ChevronUp, BookOpen, Phone } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const faqs = [
   { q: "How do I record a new observation?", a: "Go to the dashboard and click 'Add Observation', then select the child, domain, and fill in the observation details." },
@@ -22,9 +21,9 @@ export default function HelpPage() {
 
       {/* Quick help cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickCard icon={BookOpen} title="User Guide" desc="Learn how to use all features" />
-        <QuickCard icon={MessageSquare} title="Contact Support" desc="Reach the helpdesk" />
-        <QuickCard icon={Phone} title="Helpline" desc="Call 1800-XXX-XXXX" />
+        <QuickCard icon={BookOpen} title="User Guide" desc="Feature availability is described in the FAQs below" />
+        <QuickCard icon={MessageSquare} title="Contact Support" desc="Support delivery is not configured" />
+        <QuickCard icon={Phone} title="Helpline" desc="Helpline number not configured" />
       </div>
 
       {/* FAQ */}
@@ -53,23 +52,15 @@ export default function HelpPage() {
       {/* Support form */}
       <div className="card p-6">
         <h2 className="text-lg font-semibold text-stone-800 mb-4">Contact Support</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="label">Subject</label>
-            <input className="input" placeholder="Briefly describe your issue" />
-          </div>
-          <div>
-            <label className="label">Message</label>
-            <textarea className="input min-h-[100px] resize-y" placeholder="Provide details..." />
-          </div>
-          <button className="btn-primary">Send Message</button>
-        </div>
+        <p role="status" className="text-sm text-amber-800 rounded-xl bg-amber-50 border border-amber-200 p-4">
+          Support message delivery is not configured for this deployment. Contact your organization administrator for help.
+        </p>
       </div>
     </div>
   );
 }
 
-function QuickCard({ icon: Icon, title, desc }: { icon: any; title: string; desc: string }) {
+function QuickCard({ icon: Icon, title, desc }: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string }) {
   return (
     <div className="card p-5 hover:shadow-md transition">
       <div className="w-10 h-10 rounded-xl bg-forest/10 flex items-center justify-center mb-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { ScrollText, Shield, User, Clock } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import type { SessionUser, AuditLog } from "@/lib/domain";
 import { formatDateTime } from "@/lib/utils";
 

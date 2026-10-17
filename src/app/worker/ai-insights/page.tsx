@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { getAuthorizedChildren, getChildProfile } from "@/lib/data";
+import { getAuthorizedChildren } from "@/lib/data";
 import { AiInsightsView } from "@/components/ai-insights";
 import { getDemoStore } from "@/lib/demo-store";
 

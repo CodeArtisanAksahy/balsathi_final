@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Globe, Bell, Shield, Save, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Globe, Bell, Shield, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { SessionUser, AppLocale } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
@@ -11,151 +11,59 @@ import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   useEffect(() => {
-    apiFetch<SessionUser | null>("/api/auth/session").then((s) => {
-      setSession(s);
-      if (s) {
-        setName(s.name);
-        setEmail(s.email);
-      }
-    });
+    apiFetch<SessionUser | null>("/api/auth/session")
+      .then(setSession)
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Unable to load account settings."));
   }, []);
 
-  if (!session) return null;
-
   async function changeLocale(locale: AppLocale) {
-    await apiFetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
-    router.refresh();
+    setError("");
+    try {
+      await apiFetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
+      router.refresh();
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : "Unable to update language.");
+    }
   }
 
-  async function save() {
-    setSaving(true);
-    setSaved(false);
-    await new Promise((r) => setTimeout(r, 400));
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  async function signOut() {
+    setError("");
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+      router.push("/login");
+      router.refresh();
+    } catch (logoutError) {
+      setError(logoutError instanceof Error ? logoutError.message : "Unable to sign out.");
+    }
   }
+
+  if (!session) return <div role={error ? "alert" : "status"} className="text-sm text-stone-600">{error || "Loading settings…"}</div>;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-stone-800">Profile & Settings</h1>
-
-      {/* Profile */}
+      <h1 className="text-2xl font-bold text-stone-800">Settings</h1>
+      {error && <div role="alert" className="rounded-xl bg-risk-red-light p-3 text-sm text-risk-red">{error}</div>}
+      <div className="card p-6 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-forest/15 flex items-center justify-center text-forest font-semibold">{session.name.slice(0, 2).toUpperCase()}</div>
+          <div><h3 className="font-semibold text-stone-800">{session.name}</h3><p className="text-sm text-stone-500">{session.email} · {session.role.replaceAll("_", " ")}</p></div>
+        </div>
+        <p className="text-sm text-stone-500">Profile changes are managed by your administrator.</p>
+      </div>
       <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-forest/15 flex items-center justify-center text-forest font-semibold">
-            {session.name.slice(0, 2).toUpperCase()}
-          </div>
-          <div>
-            <h3 className="font-semibold text-stone-800">{session.name}</h3>
-            <p className="text-sm text-stone-500 capitalize">{session.role.toLowerCase()} • {session.centerIds[0] ?? "—"}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">Full Name</label>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Phone</label>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <div className="col-span-2">
-            <label className="label">Email</label>
-            <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} disabled />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={save} disabled={saving} className="btn-primary">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save Changes
+        <div className="flex items-center gap-2"><Globe className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Language</h3></div>
+        <div className="grid grid-cols-3 gap-2">{appLocales.map((locale) => (
+          <button key={locale} onClick={() => changeLocale(locale)} aria-pressed={session.preferredLanguage === locale} className={cn("p-3 rounded-xl border-2 text-left transition", session.preferredLanguage === locale ? "border-forest bg-forest/5" : "border-stone-200 hover:border-stone-300")}>
+            <div className="font-medium text-stone-800">{localeLabels[locale]}</div><div className="text-xs text-stone-400">{locale.toUpperCase()}</div>
           </button>
-          {saved && <span className="text-sm text-forest">Saved successfully</span>}
-        </div>
+        ))}</div>
       </div>
-
-      {/* Language */}
-      <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-forest" />
-          <h3 className="font-semibold text-stone-800">Language</h3>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {appLocales.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => changeLocale(loc)}
-              className={cn(
-                "p-3 rounded-xl border-2 text-left transition",
-                session.preferredLanguage === loc
-                  ? "border-forest bg-forest/5"
-                  : "border-stone-200 hover:border-stone-300",
-              )}
-            >
-              <div className="font-medium text-stone-800">{localeLabels[loc]}</div>
-              <div className="text-xs text-stone-400">{loc.toUpperCase()}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Bell className="w-5 h-5 text-forest" />
-          <h3 className="font-semibold text-stone-800">Notifications</h3>
-        </div>
-        {[
-          { label: "Follow-up reminders", default: true },
-          { label: "Milestone review alerts", default: true },
-          { label: "New messages from parents", default: true },
-          { label: "Sync status updates", default: false },
-        ].map((n) => (
-          <ToggleRow key={n.label} label={n.label} defaultChecked={n.default} />
-        ))}
-      </div>
-
-      {/* Security */}
-      <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-forest" />
-          <h3 className="font-semibold text-stone-800">Security</h3>
-        </div>
-        <button className="btn-secondary w-full text-left justify-start">Change Password</button>
-        <button className="btn-secondary w-full text-left justify-start">Two-Factor Authentication</button>
-        <button
-          onClick={async () => {
-            await apiFetch("/api/auth/logout", { method: "POST" });
-            router.push("/login");
-          }}
-          className="btn-secondary w-full text-left justify-start text-risk-red border-risk-red/30 hover:bg-risk-red-light"
-        >
-          Sign Out
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ToggleRow({ label, defaultChecked }: { label: string; defaultChecked: boolean }) {
-  const [on, setOn] = useState(defaultChecked);
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-stone-700">{label}</span>
-      <button
-        onClick={() => setOn((v) => !v)}
-        className={cn("w-11 h-6 rounded-full transition relative", on ? "bg-forest" : "bg-stone-300")}
-      >
-        <span className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all", on ? "left-[22px]" : "left-0.5")} />
-      </button>
+      <div className="card p-6 space-y-2"><div className="flex items-center gap-2"><Bell className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Notifications</h3></div><p className="text-sm text-stone-600">Notification preferences and delivery are not configured for this deployment.</p></div>
+      <div className="card p-6 space-y-3"><div className="flex items-center gap-2"><Shield className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Security</h3></div><p className="text-sm text-stone-600">Password changes and two-factor authentication are unavailable. Contact your administrator to update account access.</p><button onClick={signOut} className="btn-secondary w-full text-left justify-start text-risk-red border-risk-red/30 hover:bg-risk-red-light"><LogOut className="w-4 h-4" /> Sign Out</button></div>
     </div>
   );
 }

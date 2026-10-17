@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle, Clock, Target, ChevronRight, Save, Loader2 } from "lucide-react";
-import type { SessionUser, MilestoneAssessment, MilestoneDefinition, AssessmentStatus } from "@/lib/domain";
+import { CheckCircle2, Circle, Clock, Target } from "lucide-react";
+import type { SessionUser, MilestoneAssessment, AssessmentStatus } from "@/lib/domain";
 import { assessmentStatuses } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { domainLabel } from "@/lib/i18n";

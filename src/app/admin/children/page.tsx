@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { getAuthorizedChildren, getCenters } from "@/lib/data";
+import { getCenters } from "@/lib/data";
 import { ChildrenDirectory } from "@/components/children-directory";
 
 export default async function AdminChildrenPage({
