@@ -47,6 +47,23 @@ model User {
   updatedAt         DateTime  @updatedAt
 }
 
+model SignupRequest {
+  id             String   @id @default(cuid())
+  name           String
+  email          String
+  phone          String
+  role           String
+  centerName     String?
+  childReference String?
+  relationship   String?
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([email])
+}
+
 model Guardian {
   id                String    @id @default(cuid())
   name              String

@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Ban, CheckCircle2, Edit, Search, User, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Ban, CheckCircle2, ClipboardList, Edit, Search, User, UserPlus } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
 
 type Account = { id: string; name: string; email: string; role: string; phone: string; centerIds: string[]; active: boolean };
 type CenterOption = { id: string; name: string; active: boolean };
 type ChildOption = { id: string; fullName: string; internalId: string };
+type SignupRequest = { id: string; name: string; email: string; phone: string; role: string; centerName: string | null; childReference: string | null; relationship: string | null; createdAt: string };
 
 export function AdminUsers({ session, users: initialUsers, databaseMode }: { session: SessionUser; users: Account[]; databaseMode: boolean }) {
   const [users, setUsers] = useState(initialUsers);
@@ -20,7 +21,13 @@ export function AdminUsers({ session, users: initialUsers, databaseMode }: { ses
   const [editing, setEditing] = useState<Account | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
   const canManage = session.role === "DISTRICT_ADMIN" || session.role === "CENTER_ADMIN";
+
+  useEffect(() => {
+    if (!databaseMode || !canManage) return;
+    void apiFetch<SignupRequest[]>("/api/v1/admin/signup-requests").then(setSignupRequests).catch(() => setSignupRequests([]));
+  }, [databaseMode, canManage]);
   const filtered = useMemo(() => users.filter((user) => {
     const matchText = user.name.toLowerCase().includes(q.toLowerCase()) || user.email.toLowerCase().includes(q.toLowerCase());
     return matchText && (roleFilter === "ALL" || user.role === roleFilter) && (statusFilter === "ALL" || (statusFilter === "ACTIVE" ? user.active : !user.active));
@@ -44,6 +51,14 @@ export function AdminUsers({ session, users: initialUsers, databaseMode }: { ses
       const updated = await apiFetch<Account>(`/api/v1/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify({ active: !user.active }) });
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, ...updated } : item));
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to update account."); }
+  }
+
+  async function markSignupReviewed(request: SignupRequest) {
+    setError("");
+    try {
+      await apiFetch<{ id: string; status: string }>("/api/v1/admin/signup-requests", { method: "PATCH", body: JSON.stringify({ id: request.id }) });
+      setSignupRequests((current) => current.filter((item) => item.id !== request.id));
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to update signup request."); }
   }
 
   async function createAccount(formData: FormData) {
@@ -78,6 +93,9 @@ export function AdminUsers({ session, users: initialUsers, databaseMode }: { ses
     <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold text-stone-800">User Management</h1><button onClick={openAdd} disabled={!databaseMode || !canManage} className="btn-primary disabled:opacity-50"><UserPlus className="w-4 h-4" /> Add User</button></div>
     {!databaseMode && <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Account provisioning is available only when SQLite persistence is enabled.</div>}
     {error && !showAdd && <div role="alert" className="rounded-xl bg-risk-red-light p-3 text-sm text-risk-red">{error}</div>}
+    {databaseMode && canManage && <section className="card p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><ClipboardList className="h-5 w-5 text-forest"/><div><h2 className="font-semibold text-stone-800">Signup requests</h2><p className="text-xs text-stone-500">Verify the details, use Add User to provision the account, then mark the request reviewed.</p></div></div><span className="rounded-full bg-[#edf5e9] px-2.5 py-1 text-xs font-semibold text-forest">{signupRequests.length} pending</span></div>
+      {signupRequests.length ? <div className="mt-4 space-y-2">{signupRequests.map((request) => <article key={request.id} className="flex flex-col justify-between gap-3 rounded-xl border border-stone-200 p-3 sm:flex-row sm:items-center"><div><p className="font-medium text-stone-800">{request.name} <span className="ml-1 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-medium text-stone-600">{request.role === "PARENT" ? "Parent" : "Worker"}</span></p><p className="text-xs text-stone-500">{request.email} · {request.phone}</p><p className="mt-1 text-xs text-stone-500">{request.role === "PARENT" ? `Child: ${request.childReference} · ${request.relationship}` : `Center: ${request.centerName}`}</p></div><div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end"><p className="text-xs text-stone-400">{new Date(request.createdAt).toLocaleDateString()}</p><button type="button" onClick={() => void markSignupReviewed(request)} className="btn-secondary px-3 py-2 text-xs">Mark reviewed</button></div></article>)}</div> : <p className="mt-4 rounded-xl bg-stone-50 p-4 text-center text-sm text-stone-500">No signup requests right now.</p>}
+    </section>}
     <div className="flex flex-wrap gap-3"><div className="relative min-w-[200px] flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-stone-400" /><input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search users…" className="input pl-10" /></div><select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="input max-w-[190px]"><option value="ALL">All roles</option>{["WORKER", "PARENT", "CENTER_ADMIN", "DISTRICT_ADMIN"].map((role) => <option key={role}>{role}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input max-w-[160px]"><option value="ALL">All status</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></div>
     <div className="card overflow-x-auto"><table className="w-full min-w-[650px] text-sm"><thead className="bg-stone-50 text-stone-500"><tr>{["User", "Role", "Center", "Status", "Actions"].map((heading) => <th key={heading} className="px-4 py-3 text-left font-medium">{heading}</th>)}</tr></thead><tbody>{filtered.map((user) => <tr key={user.id} className="border-t border-stone-100"><td className="px-4 py-3"><div className="font-medium text-stone-800">{user.name}</div><div className="text-xs text-stone-400">{user.email}</div></td><td className="px-4 py-3">{user.role.replaceAll("_", " ")}</td><td className="px-4 py-3">{user.centerIds?.length ? user.centerIds.join(", ") : "—"}</td><td className="px-4 py-3">{user.active ? "Active" : "Inactive"}</td><td className="px-4 py-3"><button onClick={() => { setError(""); setEditing(user); }} disabled={!databaseMode || !canManage || user.id === session.id} className="rounded p-2 text-stone-600 disabled:opacity-40" title="Edit account"><Edit className="h-4 w-4" /></button><button onClick={() => toggleActive(user)} disabled={!databaseMode || !canManage || user.id === session.id} className="rounded p-2 text-stone-600 disabled:opacity-40" title={user.active ? "Deactivate" : "Activate"}>{user.active ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}</button></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="py-12 text-center text-stone-400"><User className="mx-auto mb-2 h-10 w-10" />No users found.</div>}</div>
     {showAdd && <UserCreateDialog centers={centers} children={children} canCreateCenterAdmin={session.role === "DISTRICT_ADMIN"} saving={saving} error={error} onClose={() => setShowAdd(false)} onSubmit={createAccount} />}

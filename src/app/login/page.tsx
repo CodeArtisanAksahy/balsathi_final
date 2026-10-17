@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { LoginForm } from "@/components/login-form";
 import { config } from "@/lib/config";
@@ -26,6 +27,12 @@ export default async function LoginPage() {
         <div className="card p-6 shadow-xl">
           <LoginForm dataMode={config.dataMode} />
         </div>
+        <p className="mt-5 text-center text-sm text-stone-500">
+          New to Balsathi?{" "}
+          <Link href="/create-account" className="font-semibold text-forest hover:underline">
+            Create an account
+          </Link>
+        </p>
         <p className="text-center text-xs text-stone-400 mt-4">
           {config.dataMode === "demo" ? "Authentication uses allowlisted demo accounts. Do not enter real personal or child information." : "Sign in with an account provisioned in the local SQLite database."}
         </p>

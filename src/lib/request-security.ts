@@ -15,7 +15,15 @@ export function assertSameOrigin(request: Request): void {
   try { expected = new URL(config.appOrigin).origin; } catch { throw new ApiError(503, "APP_ORIGIN_INVALID", "Application origin is not configured correctly."); }
   let actual: string;
   try { actual = new URL(origin).origin; } catch { throw new ApiError(403, "ORIGIN_FORBIDDEN", "Request origin is not allowed."); }
-  if (actual !== expected) throw new ApiError(403, "ORIGIN_FORBIDDEN", "Request origin is not allowed.");
+  const expectedUrl = new URL(expected);
+  const actualUrl = new URL(actual);
+  const isLoopback = (hostname: string) => hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  const localAlias = !config.isProduction
+    && isLoopback(expectedUrl.hostname)
+    && isLoopback(actualUrl.hostname)
+    && expectedUrl.protocol === actualUrl.protocol
+    && expectedUrl.port === actualUrl.port;
+  if (actual !== expected && !localAlias) throw new ApiError(403, "ORIGIN_FORBIDDEN", "Request origin is not allowed.");
 }
 /** Process-local limit intended as a single-instance guard, not a distributed production limit. */
 export function enforceRateLimit(request: Request, key: string, limit: number, windowMs = 60_000): void {

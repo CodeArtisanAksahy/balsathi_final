@@ -9,7 +9,7 @@ import { ChatWidget } from "./chat-widget";
 import { getConfiguredDataMode } from "@/lib/fetch";
 import { clientStore } from "@/lib/client-store";
 
-const publicPaths = ["/", "/login"];
+const publicPaths = ["/", "/login", "/create-account"];
 
 export function AppShell({ session, children }: { session: SessionUser | null; children: React.ReactNode }) {
   const pathname = usePathname();
