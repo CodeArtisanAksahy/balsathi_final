@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { MessageCircle, Send, X, Sparkles, Loader2 } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { cn } from "@/lib/utils";
-import { processChat } from "@/lib/chat-service";
+import { apiFetch } from "@/lib/fetch";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -47,9 +47,10 @@ export function ChatWidget({ session, defaultOpen = false }: { session: SessionU
     setInput("");
     setLoading(true);
     try {
-      // Read directly from the reactive client store so answers always reflect
-      // the latest records without a server round-trip.
-      const result = processChat(session, locale, question, childId || undefined);
+      const result = await apiFetch<{ answer: string; sources: string[] }>("/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ locale, question, childId: childId || undefined }),
+      });
       setMessages((m) => [
         ...m,
         { role: "assistant", content: result.answer, sources: result.sources },

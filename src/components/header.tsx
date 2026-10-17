@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { Menu, Bell, Globe, LogOut } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import type { SessionUser } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
 import { localeLabels } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/fetch";
 
 export function Header({ session, onMenuClick }: { session: SessionUser; onMenuClick: () => void }) {
   const router = useRouter();
@@ -65,10 +67,7 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
             )}
           </div>
 
-          <button className="relative p-2 rounded-xl text-stone-600 hover:bg-stone-200 transition">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full" />
-          </button>
+          <NotificationBell />
 
           <button
             onClick={handleLogout}
@@ -80,5 +79,28 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
         </div>
       </div>
     </header>
+  );
+}
+
+function NotificationBell() {
+  const [unreadCount, setUnreadCount] = useState(0);
+  const refresh = useCallback(async () => {
+    try {
+      const result = await apiFetch<{ unreadCount: number }>("/api/notifications");
+      setUnreadCount(result.unreadCount);
+    } catch { setUnreadCount(0); }
+  }, []);
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 10_000);
+    const focus = () => void refresh();
+    window.addEventListener("focus", focus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", focus); };
+  }, [refresh]);
+  return (
+    <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} className="relative rounded-xl p-2 text-stone-600 transition hover:bg-stone-200">
+      <Bell className="h-5 w-5" />
+      {unreadCount > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-500 px-1 text-center text-[10px] font-bold leading-4 text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+    </Link>
   );
 }

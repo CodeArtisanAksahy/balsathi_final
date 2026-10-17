@@ -4,12 +4,12 @@ import type { AppLocale, DevelopmentDomain } from "@/lib/domain";
 import { domainLabel } from "@/lib/i18n";
 import { Activity, Lightbulb, MessageCircle, Users, Heart } from "lucide-react";
 
-const domainMeta: Record<DevelopmentDomain, { icon: React.ComponentType<{ className?: string }>; bg: string; text: string }> = {
-  PHYSICAL: { icon: Activity, bg: "bg-forest/15", text: "text-forest" },
-  COGNITIVE: { icon: Lightbulb, bg: "bg-amber-100", text: "text-amber-600" },
-  LANGUAGE: { icon: MessageCircle, bg: "bg-purple-100", text: "text-purple-600" },
-  SOCIAL: { icon: Users, bg: "bg-blue-100", text: "text-blue-600" },
-  EMOTIONAL: { icon: Heart, bg: "bg-rose-100", text: "text-rose-600" },
+const domainMeta: Record<DevelopmentDomain, { icon: React.ComponentType<{ className?: string }>; bg: string; text: string; bar: string }> = {
+  PHYSICAL: { icon: Activity, bg: "bg-[#e8f1e6]", text: "text-[#426c46]", bar: "bg-[#79a86c]" },
+  COGNITIVE: { icon: Lightbulb, bg: "bg-[#fff0df]", text: "text-[#b96d27]", bar: "bg-[#e6a34e]" },
+  LANGUAGE: { icon: MessageCircle, bg: "bg-[#f0e9fa]", text: "text-[#8256b1]", bar: "bg-[#a485ce]" },
+  SOCIAL: { icon: Users, bg: "bg-[#e6f2f8]", text: "text-[#347ea6]", bar: "bg-[#6da9c8]" },
+  EMOTIONAL: { icon: Heart, bg: "bg-[#fbe9e8]", text: "text-[#bb5b55]", bar: "bg-[#d9827a]" },
 };
 
 export function DomainTree({
@@ -38,11 +38,8 @@ export function DomainTree({
                 <span className="text-sm text-stone-700">{domainLabel(d.domain, locale)}</span>
                 <span className="text-sm font-medium text-stone-800">{pct}%</span>
               </div>
-              <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${meta.bg.replace("/15", "").replace("bg-", "bg-")}`}
-                  style={{ width: `${pct}%` }}
-                />
+              <div className="h-2 overflow-hidden rounded-full bg-[#f0eee8]">
+                <div className={`h-full rounded-full ${meta.bar}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
           </div>

@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAnalyticsData, getAuthorizedChildren } from "@/lib/selectors";
 import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
+import { ageInMonths } from "@/lib/utils";
+import { MLModelReadiness } from "@/components/ml-model-readiness";
 
 // Compute the week-ago cutoff at module scope to avoid calling Date.now() during render.
 const WEEK_AGO_CUTOFF = Date.now() - 1000 * 60 * 60 * 24 * 7;
@@ -36,6 +38,17 @@ interface ForecastPayload {
   evaluation: Record<string, any> | null;
   historyMonths: number;
 }
+interface AnalyticsSnapshot {
+  childrenCount: number;
+  observationCount: number;
+  observationsThisWeek: number;
+  openFollowUps: number;
+  ageGroups: Array<{ label: string; count: number }>;
+  genderCounts: { boys: number; girls: number; other: number };
+  riskSummary: { high: number; needsSupport: number; noActiveFlag: number; definition: string };
+  domainObservationCounts: Array<{ domain: string; count: number }>;
+  generatedAt: string;
+}
 
 type ForecastState =
   | { status: "idle" }
@@ -60,15 +73,18 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
   const [forecast, setForecast] = useState<ForecastState>({ status: "idle" });
   const [generating, setGenerating] = useState(false);
   const [forecastStale, setForecastStale] = useState(false);
+  const [apiAnalytics, setApiAnalytics] = useState<AnalyticsSnapshot | null>(null);
+  const [analyticsError, setAnalyticsError] = useState("");
 
   const isAdmin = session.role === "CENTER_ADMIN" || session.role === "DISTRICT_ADMIN";
+  const hasRemoteAnalytics = Boolean(apiAnalytics?.riskSummary && apiAnalytics.domainObservationCounts && apiAnalytics.genderCounts && apiAnalytics.ageGroups);
 
   // ── Fetch stored forecasts on mount (SQLite mode only) ─────────────────
-  const refreshForecast = useCallback(async (cancelled?: () => boolean) => {
+  const refreshForecast = useCallback(async (cancelled?: () => boolean, showLoading = true) => {
     try {
       const mode = await getConfiguredDataMode();
       if (mode === "demo") { setForecast({ status: "unavailable" }); return; }
-      setForecast({ status: "loading" });
+      if (showLoading) setForecast({ status: "loading" });
       const data = await apiFetch<ForecastPayload>("/api/v1/analytics/forecast");
       if (!cancelled?.()) setForecast({ status: "ok", data });
     } catch (err) {
@@ -76,14 +92,36 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     }
   }, []);
 
+  const refreshApiAnalytics = useCallback(async () => {
+    try {
+      if (await getConfiguredDataMode() !== "sqlite") { setApiAnalytics(null); setAnalyticsError(""); return; }
+      const params = new URLSearchParams();
+      if (fromDate) params.set("from", new Date(`${fromDate}T00:00:00.000Z`).toISOString());
+      if (toDate) params.set("to", new Date(`${toDate}T23:59:59.999Z`).toISOString());
+      const suffix = params.size ? `?${params.toString()}` : "";
+      const data = await apiFetch<AnalyticsSnapshot>(`/api/v1/analytics/dashboard${suffix}`);
+      setApiAnalytics(data); setAnalyticsError("");
+    } catch (cause) { setAnalyticsError(cause instanceof Error ? cause.message : "Analytics data could not be refreshed."); }
+  }, [fromDate, toDate]);
+
   useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
     void refreshForecast(() => cancelled);
-    const onObservationUpdate = () => { setForecastStale(true); void refreshForecast(); };
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshForecast(() => cancelled, false); }, 15_000);
+    const onObservationUpdate = () => { setForecastStale(true); void refreshForecast(() => cancelled, false); void refreshApiAnalytics(); };
     window.addEventListener("balsathi:observations-updated", onObservationUpdate);
-    return () => { cancelled = true; window.removeEventListener("balsathi:observations-updated", onObservationUpdate); };
-  }, [isAdmin, refreshForecast]);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("balsathi:observations-updated", onObservationUpdate); };
+  }, [isAdmin, refreshForecast, refreshApiAnalytics]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void refreshApiAnalytics();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshApiAnalytics(); }, 15_000);
+    const onFocus = () => void refreshApiAnalytics();
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [isAdmin, refreshApiAnalytics]);
 
   // ── Generate a new forecast via POST ────────────────────────────────────
   const runForecast = useCallback(async () => {
@@ -108,17 +146,19 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     return (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
   }), [risks, fromDate, toDate]);
 
-  const totalObservations = filteredObservations.length;
-  const atRisk = filteredRisks.filter((r) => r.level === "HIGH").length;
-  const thisWeek = filteredObservations.filter((o) => {
+  const totalObservations = apiAnalytics?.observationCount ?? filteredObservations.length;
+  const atRisk = apiAnalytics?.riskSummary.high ?? filteredRisks.filter((r) => r.level === "HIGH").length;
+  const storeThisWeek = filteredObservations.filter((o) => {
     const t = new Date(o.observedAt).getTime();
     return t >= WEEK_AGO_CUTOFF;
   }).length;
+  const thisWeek = apiAnalytics?.observationsThisWeek ?? storeThisWeek;
 
-  const domainData = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"].map((domain) => ({
+  const storeDomainData = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"].map((domain) => ({
     domain: domain.charAt(0) + domain.slice(1).toLowerCase(),
     value: filteredObservations.filter((observation) => observation.domain === domain).length,
   }));
+  const domainData = hasRemoteAnalytics ? apiAnalytics!.domainObservationCounts.map((row) => ({ domain: row.domain.charAt(0) + row.domain.slice(1).toLowerCase(), value: row.count })) : storeDomainData;
 
   // The API's database aggregation is the source of actual monthly values in SQLite mode.
   const trendData = useMemo(() => {
@@ -138,7 +178,35 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     return [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [forecast, fromDate, toDate]);
 
-  const filteredRiskData = analytics.riskData.map((item) => ({ ...item, value: item.name === "No Risk" ? Math.max(0, children.length - filteredRisks.filter((risk) => risk.reviewRequired).length) : item.name === "At Risk" ? filteredRisks.filter((risk) => risk.level === "HIGH" && risk.reviewRequired).length : filteredRisks.filter((risk) => risk.level === "MODERATE" && risk.reviewRequired).length }));
+  const filteredRiskData = hasRemoteAnalytics ? [
+    { name: "High risk flags", value: apiAnalytics!.riskSummary.high, color: "#df6559" },
+    { name: "Needs support", value: apiAnalytics!.riskSummary.needsSupport, color: "#eda63a" },
+    { name: "No active flag", value: apiAnalytics!.riskSummary.noActiveFlag, color: "#4f8a56" },
+  ] : analytics.riskData.map((item) => ({ ...item, value: item.name === "No Risk" ? Math.max(0, children.length - filteredRisks.filter((risk) => risk.reviewRequired).length) : item.name === "At Risk" ? filteredRisks.filter((risk) => risk.level === "HIGH" && risk.reviewRequired).length : filteredRisks.filter((risk) => risk.level === "MODERATE" && risk.reviewRequired).length }));
+  const localAgeGroups = [
+    { label: "0–2 years", min: 0, max: 24 }, { label: "2–3 years", min: 24, max: 36 },
+    { label: "3–4 years", min: 36, max: 48 }, { label: "4–5 years", min: 48, max: 60 }, { label: "5+ years", min: 60, max: Infinity },
+  ].map((group) => ({ ...group, count: children.filter((child) => {
+    const months = ageInMonths(child.dateOfBirth);
+    return months >= group.min && months < group.max;
+  }).length }));
+  const ageGroups = hasRemoteAnalytics ? apiAnalytics!.ageGroups : localAgeGroups;
+  const genderTotals = hasRemoteAnalytics ? apiAnalytics!.genderCounts : {
+    boys: children.filter((child) => child.gender === "MALE").length,
+    girls: children.filter((child) => child.gender === "FEMALE").length,
+    other: children.filter((child) => child.gender !== "MALE" && child.gender !== "FEMALE").length,
+  };
+  const flagTotals = hasRemoteAnalytics ? [
+    { label: "High risk flags", count: apiAnalytics!.riskSummary.high, color: "#df6559" },
+    { label: "Needs support / open follow-up", count: apiAnalytics!.riskSummary.needsSupport, color: "#eda63a" },
+    { label: "No active risk flag", count: apiAnalytics!.riskSummary.noActiveFlag, color: "#4f8a56" },
+  ] : [
+    { label: "High risk flags", count: filteredRisks.filter((risk) => risk.reviewRequired && risk.level === "HIGH").length, color: "#df6559" },
+    { label: "Moderate flags / follow-ups", count: filteredRisks.filter((risk) => risk.reviewRequired && risk.level !== "HIGH").length, color: "#eda63a" },
+    { label: "No active risk flag", count: Math.max(0, children.length - new Set(filteredRisks.filter((risk) => risk.reviewRequired).map((risk) => risk.childId)).size), color: "#4f8a56" },
+  ];
+  const childTotal = apiAnalytics?.childrenCount ?? children.length;
+  const maxAgeCount = Math.max(1, ...ageGroups.map((group) => group.count));
 
   // Metadata from the latest forecast row
   const latestForecast = forecast.status === "ok" && forecast.data.forecasts.length > 0 ? forecast.data.forecasts[0] : null;
@@ -147,17 +215,32 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-stone-800">System Analytics</h1>
+      <header><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#638062]">Admin Panel</p><h1 className="mt-1 text-2xl font-bold text-stone-800">Analytics</h1><p className="mt-1 text-sm text-stone-500">Child population and recorded follow-up data in your authorized scope.</p></header>
+
+      <MLModelReadiness session={session} />
 
       <div className="card p-4 flex flex-wrap items-end gap-3">
         <label className="text-xs text-stone-500">From<input type="date" className="input mt-1" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /></label>
         <label className="text-xs text-stone-500">To<input type="date" className="input mt-1" value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
         {(fromDate || toDate) && <button className="btn-secondary" onClick={() => { setFromDate(""); setToDate(""); }}>Clear dates</button>}
       </div>
+      {analyticsError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">Live analytics could not refresh: {analyticsError}</div>}
+      {apiAnalytics?.generatedAt && <p className="-mt-3 text-right text-[11px] text-stone-400">Database metrics updated {new Date(apiAnalytics.generatedAt).toLocaleTimeString()}</p>}
+
+      <section aria-label="Child demographics" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat icon={Baby} label="Total Children" value={childTotal} color="bg-[#eaf3e8] text-[#386d43]" />
+        <Stat icon={Baby} label="Boys recorded" value={genderTotals.boys} color="bg-[#e6f2f8] text-[#347ea6]" />
+        <Stat icon={Baby} label="Girls recorded" value={genderTotals.girls} color="bg-[#f0e9fa] text-[#8256b1]" />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="card p-5"><h2 className="font-semibold text-stone-800">Risk and follow-up flags</h2><p className="mt-1 text-xs text-stone-500">{hasRemoteAnalytics ? apiAnalytics!.riskSummary.definition : "Operational flags only; absence of a flag is not a developmental assessment."}</p><div className="mt-4 space-y-4">{flagTotals.map((item) => <div key={item.label}><div className="mb-1 flex justify-between text-sm"><span className="text-stone-600">{item.label}</span><strong className="text-stone-800">{item.count}{childTotal ? ` (${Math.round(item.count / childTotal * 100)}%)` : ""}</strong></div><div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full" style={{ width: `${childTotal ? item.count / childTotal * 100 : 0}%`, backgroundColor: item.color }} /></div></div>)}</div></div>
+        <div className="card p-5"><h2 className="font-semibold text-stone-800">By age group</h2><p className="mt-1 text-xs text-stone-500">Calculated from current child dates of birth.</p><div className="mt-4 space-y-3">{ageGroups.map((group) => <div key={group.label} className="grid grid-cols-[84px_1fr_44px] items-center gap-3 text-sm"><span className="text-stone-600">{group.label}</span><div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-[#4f8a56]" style={{ width: `${group.count / maxAgeCount * 100}%` }} /></div><span className="text-right font-medium text-stone-700">{group.count}</span></div>)}</div><p className="mt-3 text-[11px] text-stone-400">Other / unspecified gender: {genderTotals.other}</p></div>
+      </section>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat icon={Baby} label="Total Children" value={children.length} color="bg-forest/10 text-forest" />
+        <Stat icon={Baby} label="Total Children" value={childTotal} color="bg-forest/10 text-forest" />
         <Stat icon={Activity} label="Observations" value={totalObservations} color="bg-blue-100 text-blue-600" />
         <Stat icon={AlertTriangle} label="At Risk" value={atRisk} color="bg-risk-red-light text-risk-red" />
         <Stat icon={TrendingUp} label="This Week" value={thisWeek} color="bg-purple-100 text-purple-600" />

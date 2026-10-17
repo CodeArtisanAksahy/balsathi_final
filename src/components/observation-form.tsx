@@ -14,15 +14,20 @@ import { toast } from "sonner";
 
 export function ObservationForm({
   session,
+  sqliteMode,
+  initialChildren,
   initialChildId,
   initialMethod,
 }: {
   session: SessionUser;
+  sqliteMode: boolean;
+  initialChildren?: Array<{ id: string; fullName: string }>;
   initialChildId?: string;
   initialMethod: ObservationMethod;
 }) {
   const router = useRouter();
-  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const demoChildren = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const children = sqliteMode ? (initialChildren ?? []) : demoChildren;
   const milestones = useStoreSelector((state) =>
     state.milestoneDefinitions.filter((m) => m.active),
   );
@@ -32,7 +37,7 @@ export function ObservationForm({
   const [form, setForm] = useState({
     childId: initialChildId ?? children[0]?.id ?? "",
     observedAt: new Date().toISOString().slice(0, 16),
-    method: initialMethod,
+    method: sqliteMode ? "TEXT" : initialMethod,
     observationLanguage: session.preferredLanguage,
     domain: "LANGUAGE" as DevelopmentDomain,
     activityContext: "",
@@ -105,7 +110,7 @@ export function ObservationForm({
         <div>
           <label className="label">Observation Method</label>
           <div className="grid grid-cols-3 gap-2">
-            {observationMethods.map((m) => {
+            {(sqliteMode ? observationMethods.filter((method) => method === "TEXT") : observationMethods).map((m) => {
               const icons = { TEXT: FileText, VOICE: Mic, PHOTO: Camera };
               const Icon = icons[m];
               return (
@@ -124,6 +129,7 @@ export function ObservationForm({
               );
             })}
           </div>
+          {sqliteMode && <p className="mt-2 text-xs text-amber-700">SQLite mode supports text observations only. Photo storage and voice transcription are not configured.</p>}
         </div>
 
         <div>
@@ -155,8 +161,8 @@ export function ObservationForm({
         </div>
 
         <div>
-          <label className="label">Activity Context</label>
-          <input className="input" value={form.activityContext} onChange={(e) => update("activityContext", e.target.value)} placeholder="e.g., Story circle, outdoor play" />
+          <label className="label">Activity Context *</label>
+          <input className="input" value={form.activityContext} onChange={(e) => update("activityContext", e.target.value)} placeholder="e.g., Story circle, outdoor play" required minLength={2} maxLength={200} />
         </div>
 
         <div>

@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { getChildProfile, getAuthorizedChildren } from "@/lib/data";
+import { getChildProfile } from "@/lib/data";
 import { ParentProgressView } from "@/components/parent-progress";
 import { config } from "@/lib/config";
 import { getDatabaseChildProfile } from "@/lib/database-service";
@@ -16,7 +16,6 @@ export default async function ParentChildProgressPage({
   const profile = config.dataMode === "sqlite"
     ? await getDatabaseChildProfile(session, id)
     : getChildProfile(session, id);
-  const children = getAuthorizedChildren(session);
   const childId = resolveProfileChildId(profile);
-  return <ParentProgressView session={session} profile={{ child: { id: childId } }} children={children} />;
+  return <ParentProgressView session={session} profile={{ child: { id: childId } }} />;
 }

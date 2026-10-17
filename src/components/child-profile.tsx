@@ -12,7 +12,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import type { SessionUser } from "@/lib/domain";
-import { domainLabel, getMessages } from "@/lib/i18n";
+import { domainLabel } from "@/lib/i18n";
 import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";
 import { developmentDomains } from "@/lib/domain";
 import { useStoreSelector } from "@/hooks/use-store";
@@ -28,7 +28,6 @@ const tabs = ["Overview", "Observations", "Milestones", "Growth", "Reports"] as 
 export function ChildProfileView({ session, profile: _initialProfile }: { session: SessionUser; profile: { child: { id: string } } }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
   const childId = _initialProfile.child.id;
-  const t = getMessages(session.preferredLanguage);
 
   // Read live profile from the reactive store
   const profile = useStoreSelector((state) => selectChildProfile(state, childId));
@@ -46,75 +45,79 @@ export function ChildProfileView({ session, profile: _initialProfile }: { sessio
   const child = profile.child;
   const risks = profile.risks;
   const hasRisk = risks.some((r) => r.reviewRequired);
+  const motherName = profile.guardians?.find((link: any) => link.relationship === "MOTHER")?.guardian?.name;
+  const photoPath = child.profilePhotoPath;
+  const photoUrl = photoPath?.startsWith("/api/upload/")
+    ? photoPath
+    : photoPath?.startsWith("uploads/")
+      ? `/api/upload/${encodeURIComponent(photoPath)}`
+      : null;
 
   return (
-    <div className="space-y-5">
-      <Link href="/children" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
-        <ArrowLeft className="w-4 h-4" /> Back
+    <div className="space-y-3 pb-6">
+      <Link href="/children" aria-label="Back to children" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#e9e5d9] bg-white text-stone-600 transition hover:bg-[#f6f4ed]">
+        <ArrowLeft className="h-4 w-4" />
       </Link>
 
       {/* Header */}
-      <div className="card p-5">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="w-20 h-20 rounded-2xl bg-forest/15 flex items-center justify-center text-forest text-2xl font-bold flex-shrink-0">
-            {child.fullName.slice(0, 2).toUpperCase()}
+      <section className="card border-[#e9e5d9] bg-[#fffefa] p-3.5 sm:p-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#e8f1e6] text-2xl font-bold text-[#426c46] sm:h-20 sm:w-20">
+            {photoUrl ? <img src={photoUrl} alt={`${child.fullName}`} className="h-full w-full object-cover" /> : child.fullName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <h1 className="text-xl font-bold text-stone-800">{child.fullName}</h1>
-                <p className="text-sm text-stone-500">{child.gender} • {ageLabel(child.dateOfBirth)}</p>
-                <p className="text-sm text-stone-500">Center: {profile.center?.name ?? "—"}</p>
-                <p className="text-sm text-stone-500">Worker: {profile.assignedWorker?.name ?? "—"}</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-bold text-stone-800 sm:text-lg">{child.fullName}</h1>
+                <p className="mt-0.5 text-xs text-stone-600">{child.gender === "UNSPECIFIED" ? "" : `${child.gender.charAt(0)}${child.gender.slice(1).toLowerCase()} · `}{ageLabel(child.dateOfBirth)}</p>
+                <p className="mt-0.5 truncate text-[11px] text-stone-500">{profile.center?.name ?? "Center not assigned"}</p>
+                <p className="truncate text-[11px] text-stone-500">{motherName ? `Mother: ${motherName}` : profile.assignedWorker?.name ? `Worker: ${profile.assignedWorker.name}` : "Guardian details unavailable"}</p>
               </div>
-              {hasRisk && (
-                <span className="badge bg-risk-red-light text-risk-red">
-                  <AlertTriangle className="w-3 h-3" /> At Risk
-                </span>
-              )}
+              {hasRisk && <span className="badge shrink-0 bg-[#fde8e5] text-[#b64037]"><AlertTriangle className="h-3 w-3" /> At Risk</span>}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit overflow-x-auto">
+      <nav aria-label="Child profile sections" className="flex w-full justify-between overflow-x-auto border-b border-[#e9e5d9] bg-[#fffefa] px-1">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition",
-              activeTab === tab ? "bg-white text-forest shadow-sm" : "text-stone-500 hover:text-stone-700",
+              "shrink-0 border-b-2 px-2.5 py-2.5 text-[10px] font-medium whitespace-nowrap transition sm:px-4 sm:text-xs",
+              activeTab === tab ? "border-[#4e8054] text-[#3c6843]" : "border-transparent text-stone-500 hover:text-stone-700",
             )}
           >
             {tab}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Tab content */}
       {activeTab === "Overview" && (
-        <div className="space-y-5">
-          <div className="card p-5">
-            <h3 className="font-semibold text-stone-800 mb-4">Development Overview</h3>
-            <div className="h-72">
+        <div className="space-y-3">
+          <div className="card border-[#e9e5d9] bg-[#fffefa] p-3.5 sm:p-4">
+            <h3 className="mb-1 font-semibold text-stone-800">Development Overview</h3>
+            <p className="mb-1 text-[10px] text-stone-400">Milestone progress by developmental domain</p>
+            <div className="h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#e7e5e4" />
-                  <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: "#57534e" }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: "#a8a29e" }} />
-                  <Radar name="Progress" dataKey="value" stroke="#2d5a3d" fill="#2d5a3d" fillOpacity={0.3} strokeWidth={2} />
+                  <PolarGrid stroke="#e5dfeb" />
+                  <PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "#645c6d" }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#aaa2ad" }} axisLine={false} />
+                  <Radar name="Milestone progress" dataKey="value" stroke="#8a67ad" fill="#b59ad2" fillOpacity={0.34} strokeWidth={2} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoCard icon={Calendar} label="DOB" value={formatDate(child.dateOfBirth, session.preferredLanguage)} color="bg-forest/10 text-forest" />
-            <InfoCard icon={Activity} label="Age" value={ageLabel(child.dateOfBirth)} color="bg-purple-100 text-purple-600" />
-            <InfoCard icon={Scale} label="Weight" value={`${profile.growth.at(-1)?.weightKg ?? "—"} kg`} color="bg-amber-100 text-amber-600" />
-            <InfoCard icon={Ruler} label="Height" value={`${profile.growth.at(-1)?.heightCm ?? "—"} cm`} color="bg-blue-100 text-blue-600" />
+          <div className="grid grid-cols-2 gap-2.5 min-[500px]:grid-cols-4">
+            <InfoCard icon={Calendar} label="DOB" value={formatDate(child.dateOfBirth, session.preferredLanguage)} color="bg-[#fbe9e8] text-[#bb5b55]" />
+            <InfoCard icon={Activity} label="Age" value={ageLabel(child.dateOfBirth)} color="bg-[#e8f1e6] text-[#426c46]" />
+            <InfoCard icon={Scale} label="Weight" value={`${profile.growth.at(-1)?.weightKg ?? "—"} kg`} color="bg-[#fff0df] text-[#b96d27]" />
+            <InfoCard icon={Ruler} label="Height" value={`${profile.growth.at(-1)?.heightCm ?? "—"} cm`} color="bg-[#e6f2f8] text-[#347ea6]" />
           </div>
 
           {risks.length > 0 && (
@@ -154,12 +157,12 @@ export function ChildProfileView({ session, profile: _initialProfile }: { sessio
 
 function InfoCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
   return (
-    <div className="card p-4">
-      <div className={`w-9 h-9 rounded-xl ${color} flex items-center justify-center mb-2`}>
-        <Icon className="w-4.5 h-4.5" />
+    <div className="card border-[#e9e5d9] bg-[#fffefa] p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${color}`}><Icon className="h-4 w-4" /></span>
+        <div className="text-[10px] text-stone-500">{label}</div>
       </div>
-      <div className="text-xs text-stone-500">{label}</div>
-      <div className="text-lg font-semibold text-stone-800">{value}</div>
+      <div className="text-sm font-semibold text-stone-800 sm:text-base">{value}</div>
     </div>
   );
 }
@@ -239,9 +242,9 @@ function MilestoneTab({ session, profile }: { session: SessionUser; profile: Pro
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    MET: "bg-forest/10 text-forest",
-    IN_PROGRESS: "bg-blue-100 text-blue-600",
-    NEEDS_REVIEW: "bg-amber-light text-amber-700",
+    MET: "bg-[#e8f1e6] text-[#426c46]",
+    IN_PROGRESS: "bg-[#e6f2f8] text-[#347ea6]",
+    NEEDS_REVIEW: "bg-[#fff0df] text-[#a86120]",
     NOT_OBSERVED: "bg-stone-100 text-stone-500",
     NOT_ASSESSED: "bg-stone-100 text-stone-500",
     NOT_APPLICABLE: "bg-stone-100 text-stone-500",

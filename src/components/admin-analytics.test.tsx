@@ -18,6 +18,13 @@ const payload = {
   evaluation: { trained_at: "2025-01-01T00:00:00.000Z", data_cutoff: "2024-12", metrics: { test_start: "2024-10", test_end: "2024-12", candidate_mae: 1.2, candidate_rmse: 1.5 } },
   historyMonths: 2,
 };
+const analyticsPayload = {
+  childrenCount: 3, observationCount: 23, observationsThisWeek: 5, openFollowUps: 1,
+  ageGroups: [{ label: "0–2 years", count: 1 }],
+  genderCounts: { boys: 1, girls: 2, other: 0 },
+  riskSummary: { high: 1, needsSupport: 1, noActiveFlag: 1, definition: "Active flags only." },
+  domainObservationCounts: [{ domain: "PHYSICAL", count: 4 }], generatedAt: "2025-03-01T00:00:00.000Z",
+};
 
 describe("admin forecast dashboard", () => {
   beforeEach(() => {
@@ -26,7 +33,7 @@ describe("admin forecast dashboard", () => {
     let index = 0;
     useStoreSelector.mockImplementation(() => selected[index++ % selected.length]);
     getConfiguredDataMode.mockResolvedValue("sqlite");
-    apiFetch.mockResolvedValue(payload);
+    apiFetch.mockImplementation((path: string) => Promise.resolve(path.includes("analytics/dashboard") ? analyticsPayload : payload));
   });
 
   it("renders API actuals separately from the forecast and its evaluation metadata", async () => {
@@ -38,12 +45,14 @@ describe("admin forecast dashboard", () => {
     expect(screen.getByText(/Last evaluation: 2025-01/)).toBeTruthy();
     expect(screen.getByText(/Uncertainty interval: unavailable/)).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/analytics/forecast");
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/analytics/dashboard");
   });
 
   it("shows an API error state instead of inventing predictions", async () => {
     apiFetch.mockRejectedValue(new Error("Forecast service unavailable"));
     render(<AdminAnalytics session={session} />);
-    expect((await screen.findByRole("alert")).textContent).toContain("Forecast service unavailable");
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.some((alert) => alert.textContent?.includes("Forecast service unavailable"))).toBe(true);
     expect(screen.queryByText(/forecast \d+/i)).toBeNull();
   });
 
@@ -51,7 +60,8 @@ describe("admin forecast dashboard", () => {
     render(<AdminAnalytics session={session} />);
     await screen.findByText(/2025-02: historical actual 12; no forecast/);
     act(() => window.dispatchEvent(new CustomEvent("balsathi:observations-updated")));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiFetch.mock.calls.filter(([path]) => path === "/api/v1/analytics/dashboard")).toHaveLength(2));
+    expect(apiFetch.mock.calls.filter(([path]) => path === "/api/v1/analytics/forecast")).toHaveLength(2);
     expect(apiFetch).not.toHaveBeenCalledWith("/api/v1/analytics/forecast", { method: "POST" });
   });
 });

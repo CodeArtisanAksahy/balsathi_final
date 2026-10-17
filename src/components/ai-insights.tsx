@@ -42,7 +42,7 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
       domain,
       count: domainObs.length,
       followUps,
-      pct: domainObs.length > 0 ? Math.round(((domainObs.length - followUps) / domainObs.length) * 100) : 100,
+      pct: domainObs.length > 0 ? Math.round(((domainObs.length - followUps) / domainObs.length) * 100) : 0,
     };
   });
 
@@ -72,7 +72,7 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
         </div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-light text-amber-700 text-xs font-medium">
           <Shield className="w-3.5 h-3.5" />
-          Demo indicators — review before action
+          Review before action — not a diagnosis
         </div>
       </div>
 
@@ -155,7 +155,13 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
         <div className="lg:col-span-2 space-y-4">
           {current ? (
             <>
-              <div className="card p-5">
+              <div className="overflow-hidden rounded-3xl border border-[#eee5d5] bg-[#fffdf8] shadow-sm">
+                <div className="flex items-center gap-3 bg-[#fff0e6] px-5 py-4">
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/80 text-[#cf5b48]"><Brain className="h-6 w-6" /></span>
+                  <div className="min-w-0 flex-1"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#bd5140]">AI Insight · Follow-up flag</p><h2 className="font-bold text-[#8f3e33]">{current.title}</h2></div>
+                  <RiskBadge level={current.level} large />
+                </div>
+                <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-forest/15 flex items-center justify-center text-forest font-bold">
@@ -168,12 +174,11 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
                       </p>
                     </div>
                   </div>
-                  <RiskBadge level={current.level} large />
                 </div>
 
-                <div className="bg-stone-50 rounded-xl p-4 mb-4">
-                  <h4 className="text-sm font-semibold text-stone-700 mb-1">{current.title}</h4>
-                  <p className="text-sm text-stone-600">{current.explanation}</p>
+                <div className="rounded-2xl border border-[#f1e9dc] bg-white p-4 mb-4">
+                  <h4 className="text-sm font-bold text-stone-800 mb-1">Why this needs attention</h4>
+                  <p className="text-sm leading-6 text-stone-600">{current.explanation}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -189,7 +194,7 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
 
                 {/* Source observations */}
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-stone-700 mb-2">Source Observations</h4>
+                  <h4 className="text-sm font-semibold text-stone-700 mb-2">Recorded observations</h4>
                   <div className="space-y-2">
                     {observations
                       .filter((o) => o.childId === current.childId)
@@ -208,7 +213,13 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
                           </div>
                         </div>
                       ))}
+                    {observations.filter((o) => o.childId === current.childId).length === 0 && <p className="rounded-xl bg-stone-50 p-3 text-sm text-stone-500">No observation details are available to show here.</p>}
                   </div>
+                </div>
+
+                <div className="mb-4 rounded-2xl bg-[#f5f5e9] p-4">
+                  <h4 className="text-sm font-bold text-stone-800">Next step</h4>
+                  <p className="mt-1 text-sm leading-5 text-stone-600">Review the child’s progress with their caregiver and explore age-appropriate activities. This flag is an indicator for follow-up, not a diagnosis.</p>
                 </div>
 
                 {/* Actions */}
@@ -218,12 +229,11 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
                       <CheckCircle2 className="w-4 h-4" /> Mark Reviewed
                     </button>
                   )}
-                  <Link href={`/children/${current.childId}`} className="btn-secondary">
-                    <ChevronRight className="w-4 h-4" /> View Profile
+                  <Link href={`/recommendations?childId=${current.childId}`} className="inline-flex min-h-11 flex-1 items-center justify-between rounded-xl bg-[#24733d] px-4 font-semibold text-white hover:bg-[#1d6033]">
+                    View Recommendations <ChevronRight className="w-4 h-4" />
                   </Link>
-                  <Link href={`/observations/new?childId=${current.childId}`} className="btn-secondary">
-                    <FileText className="w-4 h-4" /> Add Observation
-                  </Link>
+                  <Link href={`/children/${current.childId}`} className="btn-secondary">View Profile</Link>
+                  <Link href={`/observations/new?childId=${current.childId}`} className="btn-secondary"><FileText className="w-4 h-4" /> Add Observation</Link>
                   <button
                     onClick={() => dismiss(current.id)}
                     className="btn-secondary text-stone-500 hover:text-risk-red"
@@ -231,6 +241,7 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
                     <XCircle className="w-4 h-4" /> Dismiss Flag
                   </button>
                 </div>
+              </div>
               </div>
             </>
           ) : (
@@ -256,7 +267,9 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
                 <span className="text-sm font-medium text-stone-700">
                   {domainLabel(stat.domain, session.preferredLanguage)}
                 </span>
-                {stat.followUps > 0 ? (
+                {stat.count === 0 ? (
+                  <span className="text-[10px] text-stone-400">No data</span>
+                ) : stat.followUps > 0 ? (
                   <span className="badge bg-amber-light text-amber-700">{stat.followUps} flag</span>
                 ) : (
                   <CheckCircle2 className="w-4 h-4 text-forest" />

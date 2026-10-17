@@ -9,9 +9,10 @@ import { promisify } from "node:util";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { groupObservationCounts, milestoneCompletion, monthlyObservationCounts } from "./analytics-math";
+import { ageInMonthsAt, groupObservationCounts, milestoneCompletion, monthlyObservationCounts } from "./analytics-math";
 import type { AssessmentStatus } from "./domain";
 import { forecastDashboardSchema } from "./forecast-contract";
+import { notifyChildStakeholders, notifyUser } from "./notification-service";
 
 export function requireDatabaseMode() {
   if (config.dataMode !== "sqlite") throw new ApiError(409, "SQLITE_MODE_REQUIRED", "This endpoint requires DATA_MODE=sqlite.");
@@ -175,6 +176,7 @@ export async function createDatabaseObservation(session: SessionUser, input: {
     await tx.child.update({ where: { id: input.childId }, data: { updatedAt: new Date() } });
     if (input.followUpRequired) await tx.followUp.create({ data: { id: randomUUID(), childId: input.childId, observationId: id, assignedToId: child.assignedWorkerId, priority: "NORMAL" } });
     await tx.auditLog.create({ data: { id: randomUUID(), actorId: session.id, action: "observation.created", entityType: "Observation", entityId: id, scopeCenterId: child.centerId, metadata: { domain: input.domain, method: input.method } } });
+    await notifyChildStakeholders(tx, { actorId: session.id, childId: child.id, centerId: child.centerId, type: "OBSERVATION_CREATED", title: "New observation recorded", body: `${child.fullName}: a ${input.domain.toLowerCase()} observation was recorded.` });
     await recordIdempotency(tx, session.id, idempotencyKey, "observation.create", id);
     return observation;
   });
@@ -229,20 +231,22 @@ export async function createDatabaseMilestoneAssessment(session: SessionUser, ch
   return prisma.$transaction(async (tx) => {
     const record = await tx.milestoneAssessment.create({ data: { id: randomUUID(), childId, milestoneId: input.milestoneId, assessedById: session.id, assessedAt: new Date(), status: input.status, notes: input.notes } });
     await tx.auditLog.create({ data: { actorId: session.id, action: "milestone.assessed", entityType: "MilestoneAssessment", entityId: record.id, scopeCenterId: child.centerId, metadata: { status: input.status } } });
+    await notifyChildStakeholders(tx, { actorId: session.id, childId: child.id, centerId: child.centerId, type: "MILESTONE_UPDATED", title: "Milestone updated", body: `${child.fullName}: a developmental milestone was updated.` });
     return record;
   });
 }
 
 export async function databaseAnalytics(session: SessionUser, from?: Date, to?: Date) {
   const scope = childScopeWhere(session);
-  const children = await prisma.child.findMany({ where: scope, select: { id: true, dateOfBirth: true, centerId: true } });
+  const children = await prisma.child.findMany({ where: scope, select: { id: true, dateOfBirth: true, centerId: true, gender: true } });
   const ids = children.map((child) => child.id);
   const dateWhere = from || to ? { gte: from, lte: to } : undefined;
-  const [observations, assessments, growth, followUpRows] = await prisma.$transaction([
+  const [observations, assessments, growth, followUpRows, activeRiskRows] = await prisma.$transaction([
     prisma.observation.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { observedAt: dateWhere } : {}) }, select: { observedAt: true, domain: true, followUpRequired: true } }),
     prisma.milestoneAssessment.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { assessedAt: dateWhere } : {}) }, include: { milestone: { select: { domain: true, active: true, minAgeMonths: true, maxAgeMonths: true } } } }),
     prisma.growthMeasurement.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { measuredAt: dateWhere } : {}) }, orderBy: { measuredAt: "asc" }, select: { childId: true, measuredAt: true, heightCm: true, weightKg: true, verificationStatus: true } }),
     prisma.followUp.findMany({ where: { childId: { in: ids }, status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { childId: true } }),
+    prisma.riskAssessment.findMany({ where: { childId: { in: ids }, reviewRequired: true, ...(dateWhere ? { createdAt: dateWhere } : {}) }, select: { childId: true, level: true } }),
   ]);
   const domains = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"] as const;
   const domainAssessments = domains.map((domain) => {
@@ -252,7 +256,28 @@ export async function databaseAnalytics(session: SessionUser, from?: Date, to?: 
     }));
     return { domain, ...milestoneCompletion(applicable), definition: "Achieved / assessed milestones applicable to age at assessment; NOT_OBSERVED, NOT_ASSESSED and NOT_APPLICABLE are excluded. This is not a clinical development score." };
   });
-  return { childrenCount: children.length, observationCount: observations.length, openFollowUps: new Set(followUpRows.map((row) => row.childId)).size, domainAssessments, observationTrends: groupObservationCounts(observations), growthHistory: growth, generatedAt: new Date().toISOString(), filters: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null } };
+  const today = new Date();
+  const ageGroups = [
+    { label: "0–2 years", min: 0, max: 24 }, { label: "2–3 years", min: 24, max: 36 },
+    { label: "3–4 years", min: 36, max: 48 }, { label: "4–5 years", min: 48, max: 60 }, { label: "5+ years", min: 60, max: Infinity },
+  ].map((group) => ({ label: group.label, count: children.filter((child) => { const months = ageInMonthsAt(child.dateOfBirth, today); return months >= group.min && months < group.max; }).length }));
+  const highRiskChildren = new Set(activeRiskRows.filter((row) => row.level === "HIGH").map((row) => row.childId));
+  const moderateRiskChildren = new Set(activeRiskRows.filter((row) => row.level !== "HIGH").map((row) => row.childId));
+  const followUpChildren = new Set(followUpRows.map((row) => row.childId));
+  const needsSupport = new Set([...moderateRiskChildren, ...followUpChildren]);
+  for (const id of highRiskChildren) needsSupport.delete(id);
+  const flagged = new Set([...highRiskChildren, ...needsSupport]);
+  const domainObservationCounts = domains.map((domain) => ({ domain, count: observations.filter((row) => row.domain === domain).length }));
+  const weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const observationWeekWhere = { gte: from && from > weekStart ? from : weekStart, ...(to ? { lte: to } : {}) };
+  const observationsThisWeek = await prisma.observation.count({ where: { childId: { in: ids }, observedAt: observationWeekWhere } });
+  return {
+    childrenCount: children.length, observationCount: observations.length, observationsThisWeek, openFollowUps: followUpChildren.size,
+    domainAssessments, observationTrends: groupObservationCounts(observations), growthHistory: growth, ageGroups,
+    genderCounts: { boys: children.filter((child) => child.gender === "MALE").length, girls: children.filter((child) => child.gender === "FEMALE").length, other: children.filter((child) => child.gender !== "MALE" && child.gender !== "FEMALE").length },
+    riskSummary: { high: highRiskChildren.size, needsSupport: needsSupport.size, noActiveFlag: Math.max(0, children.length - flagged.size), definition: "Counts active risk flags and open follow-ups. No active flag is not a clinical assessment." },
+    domainObservationCounts, generatedAt: new Date().toISOString(), filters: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null },
+  };
 }
 
 export async function databaseDashboard(session: SessionUser) {
@@ -294,7 +319,7 @@ export async function databaseDashboard(session: SessionUser) {
   const activeWorkers = workers.filter((worker) => Array.isArray(worker.centerIds) && worker.centerIds.some((centerId) => typeof centerId === "string" && visibleCenterIds.has(centerId))).length;
   const centerStats = centers.map((center) => {
     const scoped = children.filter((child) => child.centerId === center.id);
-    return { centerName: center.name, totalChildren: scoped.length, followUpChildren: scoped.filter((child) => followUpChildIds.has(child.id) || child.risks.length > 0).length };
+    return { centerId: center.id, centerName: center.name, totalChildren: scoped.length, followUpChildren: scoped.filter((child) => followUpChildIds.has(child.id) || child.risks.length > 0).length };
   });
   return {
     totalChildren: children.length,
@@ -330,11 +355,15 @@ export async function createDatabaseMessage(session: SessionUser, input: { child
   const worker = child.assignedWorker;
   const recipient = session.role === "PARENT" ? worker : parent;
   if (!recipient) throw new ApiError(409, "RECIPIENT_UNAVAILABLE", "No conversation recipient is assigned to this child.");
-  return prisma.message.create({ data: {
-    childId: child.id, fromUserId: session.id, toUserId: recipient.id,
-    direction: session.role === "PARENT" ? "PARENT_TO_WORKER" : "WORKER_TO_PARENT",
-    locale: input.locale, subject: input.subject, body: input.body,
-  } });
+  return prisma.$transaction(async (tx) => {
+    const message = await tx.message.create({ data: {
+      childId: child.id, fromUserId: session.id, toUserId: recipient.id,
+      direction: session.role === "PARENT" ? "PARENT_TO_WORKER" : "WORKER_TO_PARENT",
+      locale: input.locale, subject: input.subject, body: input.body,
+    } });
+    await notifyUser(tx, { recipientId: recipient.id, childId: child.id, type: "MESSAGE_RECEIVED", title: "New message", body: `${child.fullName}: ${input.subject}` });
+    return message;
+  });
 }
 
 export async function listDatabaseRecommendations(session: SessionUser, childId: string) {

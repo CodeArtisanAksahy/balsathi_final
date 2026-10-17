@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, MessageSquare, ChevronDown, ChevronUp, BookOpen, Phone } from "lucide-react";
+import Link from "next/link";
+import { HelpCircle, MessageSquare, ChevronDown, ChevronUp, BookOpen, Phone, HeartPulse, MessageCircle, ShieldAlert } from "lucide-react";
 
 const faqs = [
   { q: "How do I record a new observation?", a: "Go to the dashboard and click 'Add Observation', then select the child, domain, and fill in the observation details." },
@@ -17,13 +18,13 @@ export default function HelpPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-stone-800">Help & Support</h1>
+      <section className="rounded-3xl bg-[#eff6eb] p-5"><h1 className="text-xl font-bold text-stone-800">Help &amp; Support</h1><p className="mt-1 text-sm text-stone-600">We’re here to help you.</p><div className="mt-4 grid grid-cols-2 gap-3"><Link href="/messages" className="flex items-center gap-2 rounded-2xl bg-white p-3 text-sm font-medium text-stone-700"><MessageCircle className="h-5 w-5 text-[#386d43]"/>Talk to worker</Link><Link href="/parent/health" className="flex items-center gap-2 rounded-2xl bg-white p-3 text-sm font-medium text-stone-700"><HeartPulse className="h-5 w-5 text-[#386d43]"/>Health guidance</Link></div></section>
 
       {/* Quick help cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickCard icon={BookOpen} title="User Guide" desc="Feature availability is described in the FAQs below" />
-        <QuickCard icon={MessageSquare} title="Contact Support" desc="Support delivery is not configured" />
-        <QuickCard icon={Phone} title="Helpline" desc="Helpline number not configured" />
+        <QuickCard icon={BookOpen} title="FAQs" desc="Answers to common questions" />
+        <Link href="/messages"><QuickCard icon={MessageSquare} title="Talk to Worker" desc="Send a message to your Anganwadi worker" /></Link>
+        <QuickCard icon={Phone} title="Call Support" desc="A support phone number is not configured" />
       </div>
 
       {/* FAQ */}
@@ -50,12 +51,7 @@ export default function HelpPage() {
       </div>
 
       {/* Support form */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-stone-800 mb-4">Contact Support</h2>
-        <p role="status" className="text-sm text-amber-800 rounded-xl bg-amber-50 border border-amber-200 p-4">
-          Support message delivery is not configured for this deployment. Contact your organization administrator for help.
-        </p>
-      </div>
+      <div role="status" className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><ShieldAlert className="h-5 w-5 shrink-0"/><p>Phone support and emergency contact numbers are not configured for this deployment. For an emergency, contact your local emergency service.</p></div>
     </div>
   );
 }

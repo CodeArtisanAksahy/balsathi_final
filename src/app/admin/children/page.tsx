@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { getCenters } from "@/lib/data";
 import { ChildrenDirectory } from "@/components/children-directory";
+import { config } from "@/lib/config";
+import { prisma } from "@/lib/prisma";
 
 export default async function AdminChildrenPage({
   searchParams,
@@ -19,8 +21,8 @@ export default async function AdminChildrenPage({
     page: params.page ? parseInt(params.page) : 1,
     pageSize: 9,
   };
-  const { getChildrenDirectory } = await import("@/lib/data");
-  const result = getChildrenDirectory(session, filters);
-  const centers = getCenters(session);
-  return <ChildrenDirectory session={session} result={result} centers={centers} filters={filters} />;
+  const centers = config.dataMode === "sqlite"
+    ? await prisma.center.findMany({ where: session.role === "DISTRICT_ADMIN" ? { active: true } : { active: true, id: { in: session.centerIds } }, select: { id: true, name: true }, orderBy: { name: "asc" } })
+    : getCenters(session);
+  return <ChildrenDirectory session={session} centers={centers} filters={filters} />;
 }

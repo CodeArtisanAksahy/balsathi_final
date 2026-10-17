@@ -1,6 +1,7 @@
 import { errorResponse, jsonResponse, readJson } from "@/lib/api";
 import { ApiError, getActorFromSession, requirePermission, requireDatabaseChildAccess } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
+import { notifyChildStakeholders } from "@/lib/notification-service";
 import { requireDatabaseMode } from "@/lib/database-service";
 import { z } from "zod";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requireDatabaseMode(); const session = await getActorFromSession(); requirePermission(session.role, "observations:create"); const { id } = await params; const child = await requireDatabaseChildAccess(session, id); const input = schema.parse(await readJson(request));
     const measuredAt = new Date(input.measuredAt);
     if (measuredAt > new Date(Date.now() + 5 * 60_000) || measuredAt < child.dateOfBirth) throw new ApiError(422, "INVALID_MEASURED_AT", "Measurement date must be between the child's date of birth and the present.");
-    const saved = await prisma.$transaction(async (tx) => { const record = await tx.growthMeasurement.create({ data: { id: crypto.randomUUID(), childId: id, measuredAt, heightCm: input.heightCm, weightKg: input.weightKg, headCircumferenceCm: input.headCircumferenceCm ?? null, notes: input.notes ?? null, measurementSource: input.measurementSource, measuredById: session.id, verificationStatus: "UNREVIEWED" } }); await tx.auditLog.create({ data: { actorId: session.id, action: "growth.recorded", entityType: "GrowthMeasurement", entityId: record.id, scopeCenterId: child.centerId, metadata: { verificationStatus: record.verificationStatus } } }); return record; });
+    const saved = await prisma.$transaction(async (tx) => { const record = await tx.growthMeasurement.create({ data: { id: crypto.randomUUID(), childId: id, measuredAt, heightCm: input.heightCm, weightKg: input.weightKg, headCircumferenceCm: input.headCircumferenceCm ?? null, notes: input.notes ?? null, measurementSource: input.measurementSource, measuredById: session.id, verificationStatus: "UNREVIEWED" } }); await tx.auditLog.create({ data: { actorId: session.id, action: "growth.recorded", entityType: "GrowthMeasurement", entityId: record.id, scopeCenterId: child.centerId, metadata: { verificationStatus: record.verificationStatus } } }); await notifyChildStakeholders(tx, { actorId: session.id, childId: child.id, centerId: child.centerId, type: "GROWTH_RECORDED", title: "Height and weight recorded", body: `New growth measurements were recorded for ${child.fullName}.` }); return record; });
     return jsonResponse(saved, 201);
   }
   catch (error) { return errorResponse(error); }

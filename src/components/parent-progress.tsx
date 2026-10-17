@@ -1,209 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import {
-  ArrowLeft, Activity, CheckCircle2, Clock, Target,
-  TrendingUp,
-} from "lucide-react";
-import {
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
-} from "recharts";
-import type { SessionUser } from "@/lib/domain";
-import { developmentDomains } from "@/lib/domain";
-import { domainLabel, getMessages } from "@/lib/i18n";
-import { ageLabel, formatDate, formatDateTime, cn } from "@/lib/utils";
+import { useState } from "react";
+import { ArrowLeft, CheckCircle2, Circle, Clock3, Sparkles } from "lucide-react";
 import { useStoreSelector } from "@/hooks/use-store";
-import { getChildProfile as selectChildProfile, getAuthorizedChildren } from "@/lib/selectors";
+import { getChildProfile } from "@/lib/selectors";
+import { developmentDomains } from "@/lib/domain";
+import type { SessionUser } from "@/lib/domain";
+import { domainLabel } from "@/lib/i18n";
+import { ageLabel, formatDate } from "@/lib/utils";
 
-export function ParentProgressView({
-  session,
-  profile: initialProfile,
-  children: _initialChildren,
-}: {
-  session: SessionUser;
-  profile: { child: { id: string } };
-  children: Array<{ id: string; fullName: string }>;
-}) {
+const colors: Record<string, string> = { PHYSICAL: "#4f8a56", COGNITIVE: "#e6a32c", LANGUAGE: "#8b65b4", SOCIAL: "#4398b8", EMOTIONAL: "#df7770" };
+
+export function ParentProgressView({ session, profile: initialProfile }: { session: SessionUser; profile: { child: { id: string } } }) {
   const childId = initialProfile.child.id;
-  const profile = useStoreSelector((state) => selectChildProfile(state, childId));
-  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
-  const t = getMessages(session.preferredLanguage);
-  if (!profile) return <div className="card p-8 text-center text-stone-500">Child record not found.</div>;
-  const child = profile.child;
-  const locale = session.preferredLanguage;
+  const profile = useStoreSelector((state) => getChildProfile(state, childId));
+  const [tab, setTab] = useState<"overview" | "domains" | "timeline">("overview");
+  if (!profile) return <div className="rounded-3xl bg-white p-8 text-center text-stone-500">Child record not found.</div>;
 
-  const radarData = developmentDomains.map((domain) => {
-    const assessments = profile.milestoneAssessments.filter((a) => {
-      const def = profile.milestoneDefinitions.find((m) => m.id === a.milestoneId);
-      return def?.domain === domain;
-    });
-    const met = assessments.filter((a) => a.status === "MET").length;
-    const total = assessments.filter((assessment) => !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(assessment.status)).length;
-    return { domain: domainLabel(domain, locale), value: total ? Math.round((met / total) * 100) : null, fullMark: 100 };
+  const progress = developmentDomains.map((domain) => {
+    const ids = new Set(profile.milestoneDefinitions.filter((item) => item.active && item.domain === domain).map((item) => item.id));
+    const rows = profile.milestoneAssessments.filter((item) => ids.has(item.milestoneId) && !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(item.status));
+    const met = rows.filter((item) => item.status === "MET").length;
+    return { domain, count: rows.length, met, score: rows.length ? Math.round(met / rows.length * 100) : null };
   });
+  const scored = progress.filter((item) => item.score !== null);
+  const overall = scored.length ? Math.round(scored.reduce((total, item) => total + (item.score ?? 0), 0) / scored.length) : null;
+  const timeline = profile.milestoneAssessments.map((assessment) => ({ assessment, milestone: profile.milestoneDefinitions.find((item) => item.id === assessment.milestoneId) })).filter((item) => item.milestone).sort((a, b) => b.assessment.assessedAt.localeCompare(a.assessment.assessedAt));
 
-  const completed = profile.milestoneAssessments.filter((a) => a.status === "MET").length;
-  const inProgress = profile.milestoneAssessments.filter((a) => a.status === "IN_PROGRESS").length;
-  const needsReview = profile.milestoneAssessments.filter((a) => a.status === "NEEDS_REVIEW").length;
-  const lastGrowth = profile.growth[profile.growth.length - 1];
+  return <main className="mx-auto max-w-2xl space-y-4 pb-6">
+    <header className="flex items-center gap-3"><Link href="/dashboard" aria-label="Back to home" className="rounded-full p-2 text-stone-600 hover:bg-white"><ArrowLeft className="h-5 w-5" /></Link><div className="min-w-0"><h1 className="truncate font-semibold text-stone-800">{profile.child.fullName}</h1><p className="text-xs text-stone-500">{ageLabel(profile.child.dateOfBirth)}</p></div></header>
+    <nav className="grid grid-cols-3 rounded-2xl bg-[#f0eee8] p-1" aria-label="Progress views">{(["overview", "domains", "timeline"] as const).map((key) => <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-2 py-2 text-sm capitalize ${tab === key ? "bg-[#eaf3e8] font-semibold text-[#386d43] shadow-sm" : "text-stone-500"}`}>{key}</button>)}</nav>
 
-  return (
-    <div className="space-y-6">
-      <Link href="/children" className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-stone-700">
-        <ArrowLeft className="w-4 h-4" /> Back to Children
-      </Link>
+    {tab === "overview" && <section className="rounded-3xl border border-[#eee8dc] bg-white p-5 shadow-sm">
+      <h2 className="font-semibold text-stone-800">Overall Progress</h2>
+      {overall === null ? <p className="my-8 rounded-2xl bg-[#fbfaf6] p-6 text-center text-sm text-stone-500">Progress appears when milestone assessments are recorded.</p> : <div className="py-5 text-center"><div className="mx-auto grid h-36 w-36 place-items-center rounded-full" style={{ background: `conic-gradient(#32804b ${overall * 3.6}deg, #edf0e9 0deg)` }}><div className="grid h-28 w-28 place-content-center rounded-full bg-white"><strong className="text-3xl text-stone-800">{overall}%</strong><span className="text-xs text-[#386d43]">Assessed milestones</span></div></div><p className="mx-auto mt-4 max-w-xs text-sm text-stone-600">Based on recorded milestone assessments. This is not a clinical evaluation.</p></div>}
+      <div className="mt-4 divide-y divide-stone-100">{progress.map((item) => <div key={item.domain} className="flex items-center gap-3 py-3"><span className="grid h-9 w-9 place-items-center rounded-full text-lg" style={{ backgroundColor: `${colors[item.domain]}18`, color: colors[item.domain] }}>●</span><span className="min-w-0 flex-1 text-sm font-medium text-stone-700">{domainLabel(item.domain, session.preferredLanguage)}</span>{item.score === null ? <span className="text-xs text-stone-400">No data</span> : <><div className="h-1.5 w-24 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full" style={{ width: `${item.score}%`, backgroundColor: colors[item.domain] }} /></div><span className="w-10 text-right text-sm font-semibold text-stone-700">{item.score}%</span></>}</div>)}</div>
+    </section>}
 
-      {/* Header */}
-      <div className="card p-5">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="w-16 h-16 rounded-2xl bg-forest/15 flex items-center justify-center text-forest text-2xl font-bold flex-shrink-0">
-            {child.fullName.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-stone-800">{child.fullName}</h1>
-            <p className="text-sm text-stone-500">
-              {ageLabel(child.dateOfBirth)} • {child.gender} • ID: {child.internalId}
-            </p>
-            <p className="text-sm text-stone-500">Anganwadi Center: {profile.center?.name ?? "—"}</p>
-          </div>
-          {profile.risks.some((r) => r.reviewRequired) && (
-            <span className="badge bg-amber-light text-amber-700">
-              <Target className="w-3 h-3" /> Follow-up noted
-            </span>
-          )}
-        </div>
-      </div>
+    {tab === "domains" && <section className="space-y-3">{progress.map((item) => <article key={item.domain} className="rounded-2xl border border-[#eee8dc] bg-white p-4"><div className="flex items-center justify-between"><h2 className="font-semibold text-stone-800">{domainLabel(item.domain, session.preferredLanguage)}</h2><span className="text-sm font-semibold" style={{ color: colors[item.domain] }}>{item.score === null ? "No data" : `${item.score}%`}</span></div><p className="mt-1 text-xs text-stone-500">{item.count ? `${item.met} of ${item.count} assessed milestones achieved` : "No milestone assessments recorded for this domain."}</p></article>)}</section>}
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={CheckCircle2} label="Milestones Met" value={completed} color="bg-forest/10 text-forest" />
-        <StatCard icon={Clock} label="In Progress" value={inProgress} color="bg-blue-100 text-blue-600" />
-        <StatCard icon={Activity} label="Observations" value={profile.observations.length} color="bg-purple-100 text-purple-600" />
-        <StatCard icon={TrendingUp} label="Growth Records" value={profile.growth.length} color="bg-amber-light text-amber-700" />
-      </div>
-
-      {/* Development overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Development Overview</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="#e7e5e4" />
-                <PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "#57534e" }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#a8a29e" }} />
-                <Radar name="Progress" dataKey="value" stroke="#2d5a3d" fill="#2d5a3d" fillOpacity={0.3} strokeWidth={2} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Latest Growth</h3>
-          {lastGrowth ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
-                <span className="text-sm text-stone-600">Weight</span>
-                <span className="font-semibold text-stone-800">{lastGrowth.weightKg} kg</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
-                <span className="text-sm text-stone-600">Height</span>
-                <span className="font-semibold text-stone-800">{lastGrowth.heightCm} cm</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50">
-                <span className="text-sm text-stone-600">Measured on</span>
-                <span className="font-medium text-stone-700">{formatDate(lastGrowth.measuredAt, locale)}</span>
-              </div>
-              <Link href="/growth" className="btn-secondary w-full justify-center text-sm">
-                View Growth Chart
-              </Link>
-            </div>
-          ) : (
-            <p className="text-sm text-stone-400 text-center py-8">No growth measurements yet.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Recent observations */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-stone-800">Recent Observations</h3>
-          <Link href="/observations" className="text-xs text-forest font-medium hover:underline">View All</Link>
-        </div>
-        <div className="space-y-3">
-          {profile.observations.slice(0, 4).map((obs) => (
-            <div key={obs.id} className="flex items-start gap-3 p-3 rounded-xl bg-stone-50/60">
-              <div className={cn(
-                "w-2 h-2 rounded-full mt-1.5 flex-shrink-0",
-                obs.followUpRequired ? "bg-amber-500" : "bg-forest",
-              )} />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm text-stone-700 line-clamp-2">{obs.observationText}</div>
-                <div className="text-xs text-stone-400 mt-0.5">
-                  {domainLabel(obs.domain, locale)} • {formatDateTime(obs.observedAt, locale)}
-                </div>
-              </div>
-            </div>
-          ))}
-          {profile.observations.length === 0 && (
-            <p className="text-sm text-stone-400 text-center py-4">No observations yet.</p>
-          )}
-        </div>
-      </div>
-
-      {/* Milestones summary */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-stone-800">Milestone Journey</h3>
-          <Link href={`/milestones?childId=${child.id}`} className="text-xs text-forest font-medium hover:underline">
-            View Journey
-          </Link>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="text-center p-3 rounded-xl bg-forest/5">
-            <div className="text-2xl font-bold text-forest">{completed}</div>
-            <div className="text-xs text-stone-500 mt-1">Completed</div>
-          </div>
-          <div className="text-center p-3 rounded-xl bg-blue-50">
-            <div className="text-2xl font-bold text-blue-600">{inProgress}</div>
-            <div className="text-xs text-stone-500 mt-1">In Progress</div>
-          </div>
-          <div className="text-center p-3 rounded-xl bg-amber-50">
-            <div className="text-2xl font-bold text-amber-600">{needsReview}</div>
-            <div className="text-xs text-stone-500 mt-1">Needs Review</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Recommendations */}
-      {profile.recommendations.length > 0 && (
-        <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Suggested Home Activities</h3>
-          <div className="space-y-3">
-            {profile.recommendations.filter((r) => r.approvedForParent).map((r) => (
-              <div key={r.id} className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-                <h4 className="font-medium text-stone-800 text-sm">{r.title}</h4>
-                <p className="text-sm text-stone-600 mt-1">{r.description}</p>
-              </div>
-            ))}
-          </div>
-          <Link href="/recommendations" className="btn-secondary w-full justify-center text-sm mt-4">
-            All Activities
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
-  return (
-    <div className="card p-4">
-      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center mb-2", color)}>
-        <Icon className="w-4.5 h-4.5" />
-      </div>
-      <div className="text-2xl font-bold text-stone-800">{value}</div>
-      <div className="text-xs text-stone-500">{label}</div>
-    </div>
-  );
+    {tab === "timeline" && <section className="rounded-3xl border border-[#eee8dc] bg-white p-4"><h2 className="mb-3 font-semibold text-stone-800">Milestone Timeline</h2>{timeline.length ? <ol className="space-y-3">{timeline.map(({ assessment, milestone }) => <li key={assessment.id} className="flex gap-3 rounded-2xl bg-[#faf9f5] p-3"><span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ${assessment.status === "MET" ? "bg-[#e6f2e4] text-[#4f8a56]" : assessment.status === "IN_PROGRESS" ? "bg-[#fff3df] text-[#d18a20]" : "bg-[#f0eafa] text-[#8b65b4]"}`}>{assessment.status === "MET" ? <CheckCircle2 className="h-4 w-4" /> : assessment.status === "IN_PROGRESS" ? <Clock3 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}</span><div className="min-w-0 flex-1"><p className="text-sm font-medium text-stone-800">{milestone?.title[session.preferredLanguage] ?? milestone?.title.en}</p><p className="mt-0.5 text-xs capitalize text-stone-500">{assessment.status.toLowerCase().replaceAll("_", " ")} · {formatDate(assessment.assessedAt, session.preferredLanguage)}</p>{assessment.notes && <p className="mt-1 text-xs text-stone-600">{assessment.notes}</p>}</div></li>)}</ol> : <p className="py-10 text-center text-sm text-stone-500"><Sparkles className="mx-auto mb-2 h-6 w-6 text-[#8b65b4]" />No milestone updates recorded yet.</p>}</section>}
+    <Link href={`/parent/children/${profile.child.id}/milestones`} className="flex items-center justify-center rounded-2xl border border-[#d9e5d5] bg-[#f4f8f1] p-3 text-sm font-medium text-[#386d43]">View all milestones</Link>
+  </main>;
 }

@@ -9,6 +9,7 @@ __pycache__/
 .pytest_cache/
 ml/artifacts/
 ml/private-data/
+ml-service/models/
 prisma/*.db
 prisma/*.db-journal
 prisma/*.sqlite

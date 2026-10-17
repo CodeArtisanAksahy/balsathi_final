@@ -5,6 +5,8 @@ import { z } from "zod";
 import { config } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { requireDatabaseChildAccess } from "@/lib/authorization";
+import { childScopeWhere } from "@/lib/database-service";
+import { notifyChildStakeholders } from "@/lib/notification-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +20,13 @@ export async function GET(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "reports:read");
     const childId = new URL(request.url).searchParams.get("childId");
-    if (config.dataMode === "sqlite") { if (!childId) return jsonResponse([]); await requireDatabaseChildAccess(session, childId); return jsonResponse(await prisma.reportRecord.findMany({ where: { childId }, orderBy: { createdAt: "desc" } })); }
+    if (config.dataMode === "sqlite") {
+      if (childId) {
+        await requireDatabaseChildAccess(session, childId);
+        return jsonResponse(await prisma.reportRecord.findMany({ where: { childId }, orderBy: { createdAt: "desc" } }));
+      }
+      return jsonResponse(await prisma.reportRecord.findMany({ where: { child: childScopeWhere(session) }, orderBy: { createdAt: "desc" }, take: 500 }));
+    }
     if (!childId) return jsonResponse([]);
     const reports = getChildReports(session, childId);
     return jsonResponse(reports);
@@ -37,7 +45,20 @@ export async function POST(request: Request): Promise<Response> {
       const [observations, risks, recommendations, achievedMilestones, growthCount] = await prisma.$transaction([
         prisma.observation.count({ where: { childId: child.id } }), prisma.riskAssessment.count({ where: { childId: child.id, reviewRequired: true } }), prisma.recommendation.count({ where: { childId: child.id, status: "ACTIVE" } }), prisma.milestoneAssessment.count({ where: { childId: child.id, status: "MET" } }), prisma.growthMeasurement.count({ where: { childId: child.id } }),
       ]);
-      const report = await prisma.$transaction(async (tx) => { const row = await tx.reportRecord.create({ data: { id: crypto.randomUUID(), childId: child.id, centerId: child.centerId, generatedById: session.id, title: `${child.fullName} - Progress Report`, periodLabel: "Current records", summary: `Records through ${new Date().toISOString()}: ${observations} observations, ${growthCount} growth measurements, ${achievedMilestones} milestones marked met, ${risks} open follow-up flags, and ${recommendations} active recommendations. Milestone counts are activity summaries, not clinical conclusions.` } }); await tx.auditLog.create({ data: { actorId: session.id, action: "report.generated", entityType: "Report", entityId: row.id, scopeCenterId: child.centerId, metadata: { childId: child.id } } }); return row; });
+      const report = await prisma.$transaction(async (tx) => {
+        const row = await tx.reportRecord.create({ data: {
+          id: crypto.randomUUID(), childId: child.id, centerId: child.centerId,
+          generatedById: session.id, title: `${child.fullName} - Progress Report`,
+          periodLabel: "Current records",
+          summary: `Records through ${new Date().toISOString()}: ${observations} observations, ${growthCount} growth measurements, ${achievedMilestones} milestones marked met, ${risks} open follow-up flags, and ${recommendations} active recommendations. Milestone counts are activity summaries, not clinical conclusions.`,
+        } });
+        await tx.auditLog.create({ data: {
+          actorId: session.id, action: "report.generated", entityType: "Report",
+          entityId: row.id, scopeCenterId: child.centerId, metadata: { childId: child.id },
+        } });
+        await notifyChildStakeholders(tx, { actorId: session.id, childId: child.id, centerId: child.centerId, type: "REPORT_READY", title: "A progress report is ready", body: `A new progress report is available for ${child.fullName}.` });
+        return row;
+      });
       return jsonResponse(report, 201);
     }
     const report = generateReport(session, input.childId);

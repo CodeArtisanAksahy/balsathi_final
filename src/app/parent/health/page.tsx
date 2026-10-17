@@ -1,145 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Heart, Apple, Moon, Activity, Droplets, Sun, BookOpen,
-  ChevronDown, ChevronUp, ShieldAlert,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Apple, HeartPulse, HandHeart, ShieldAlert, ChevronRight } from "lucide-react";
 
-const healthTopics = [
-  {
-    id: "nutrition",
-    icon: Apple,
-    title: "Nutrition & Feeding",
-    color: "bg-forest/10 text-forest",
-    items: [
-      { title: "Balanced meals for toddlers", desc: "Include grains, proteins, fruits, vegetables, and dairy in every meal. Offer small, frequent meals and snacks." },
-      { title: "Iron-rich foods", desc: "Spinach, lentils, jaggery, and fortified cereals help prevent anemia. Pair with vitamin C (citrus, tomatoes) for better absorption." },
-      { title: "Hydration", desc: "Offer water throughout the day. Limit sugary drinks. Breast milk or formula remains important under 2 years." },
-      { title: "Avoid choking hazards", desc: "Cut food into small pieces. Avoid whole grapes, nuts, hard candies, and raw carrots until the child can chew well." },
-    ],
-  },
-  {
-    id: "sleep",
-    icon: Moon,
-    title: "Sleep & Rest",
-    color: "bg-purple-100 text-purple-600",
-    items: [
-      { title: "Sleep duration by age", desc: "1-2 years: 11-14 hours. 3-5 years: 10-13 hours. Includes naps. Consistent bedtime routines help." },
-      { title: "Bedtime routine", desc: "A warm bath, story, and lullaby signal sleep time. Keep the room dark, quiet, and cool." },
-      { title: "Screen time before bed", desc: "Avoid screens 1 hour before bedtime. Blue light can disrupt sleep patterns." },
-    ],
-  },
-  {
-    id: "activity",
-    icon: Activity,
-    title: "Physical Activity",
-    color: "bg-amber-light text-amber-700",
-    items: [
-      { title: "Daily movement", desc: "Toddlers need at least 3 hours of active play per day. Running, climbing, dancing, and outdoor play all count." },
-      { title: "Gross motor skills", desc: "Activities like kicking a ball, jumping, and balancing help develop large muscle groups." },
-      { title: "Fine motor skills", desc: "Stacking blocks, drawing, using spoons, and turning pages develop hand-eye coordination." },
-    ],
-  },
-  {
-    id: "hygiene",
-    icon: Droplets,
-    title: "Hygiene & Safety",
-    color: "bg-blue-100 text-blue-600",
-    items: [
-      { title: "Handwashing", desc: "Wash hands before meals, after using the toilet, and after playing outside. Use soap and water for 20 seconds." },
-      { title: "Oral care", desc: "Brush teeth twice a day with a soft brush and a small amount of fluoride toothpaste. Visit a dentist by age 1." },
-      { title: "Home safety", desc: "Use safety gates, outlet covers, and corner guards. Keep medicines and cleaning products out of reach." },
-    ],
-  },
-  {
-    id: "sun",
-    icon: Sun,
-    title: "Sun & Outdoor Play",
-    color: "bg-orange-100 text-orange-600",
-    items: [
-      { title: "Vitamin D", desc: "15-20 minutes of morning sunlight helps the body make vitamin D for strong bones." },
-      { title: "Sun protection", desc: "Use hats, light clothing, and child-safe sunscreen during peak sun hours (10am-4pm)." },
-    ],
-  },
-  {
-    id: "learning",
-    icon: BookOpen,
-    title: "Learning & Stimulation",
-    color: "bg-pink-100 text-pink-600",
-    items: [
-      { title: "Reading together", desc: "Read aloud daily. Point to pictures, ask questions, and let the child turn pages. Builds language and bonding." },
-      { title: "Talking and listening", desc: "Narrate daily activities, respond to babble, and ask open-ended questions. Language grows through conversation." },
-      { title: "Play-based learning", desc: "Free play, pretend play, and exploration are how young children learn best. Avoid passive screen time under 18 months." },
-    ],
-  },
-];
+const content = {
+  Nutrition: [
+    { title: "Iron-rich foods", body: "Include iron-containing foods such as lentils, beans, leafy greens, and fortified cereals as part of a varied diet." },
+    { title: "Healthy weight for age", body: "Growth should be reviewed using a child’s age-specific growth chart by a qualified health worker." },
+    { title: "Immunity- supporting foods", body: "Offer a variety of fruits, vegetables, pulses, and other age-appropriate foods. No single food prevents illness." },
+    { title: "Daily routine tips", body: "Regular meals, active play, sleep, and responsive care support a healthy daily rhythm." },
+  ],
+  Health: [
+    { title: "Routine check-ups", body: "Keep scheduled well-child visits and discuss growth, development, and any concerns with a health professional." },
+    { title: "Vaccination records", body: "Follow the vaccination schedule provided by your local health service and keep the child’s record updated." },
+    { title: "When to seek care", body: "For concerning symptoms or urgent changes in your child’s health, contact a qualified health provider promptly." },
+  ],
+  Care: [
+    { title: "Responsive play", body: "Follow your child’s interests, talk together, and offer safe play materials suited to their age." },
+    { title: "Rest and routine", body: "A predictable, calming bedtime routine can help children settle and get adequate rest." },
+    { title: "Safe home", body: "Keep medicines, cleaning products, small objects, and hot items out of children’s reach." },
+  ],
+};
+const icon = { Nutrition: Apple, Health: HeartPulse, Care: HandHeart };
 
 export default function ParentHealthPage() {
-  const [expanded, setExpanded] = useState<string | null>("nutrition");
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
-            <Heart className="w-4 h-4 text-rose-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-stone-800">Health &amp; Well-being</h1>
-        </div>
-        <p className="text-stone-500 text-sm">
-          General educational guidance for parents. Not individualized medical advice. Consult a pediatrician for specific concerns.
-        </p>
-      </div>
-
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-        <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-amber-800">
-          <p className="font-medium">Important</p>
-          <p className="mt-0.5">
-            This content is for general educational purposes only. It does not replace professional medical advice, diagnosis, or treatment.
-            Always seek the advice of a qualified health provider with any questions about your child&apos;s health.
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {healthTopics.map((topic) => {
-          const Icon = topic.icon;
-          const isOpen = expanded === topic.id;
-          return (
-            <div key={topic.id} className="card overflow-hidden">
-              <button
-                onClick={() => setExpanded(isOpen ? null : topic.id)}
-                className="w-full flex items-center justify-between p-4 hover:bg-stone-50 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", topic.color)}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-semibold text-stone-800">{topic.title}</h3>
-                </div>
-                {isOpen ? (
-                  <ChevronUp className="w-5 h-5 text-stone-400" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-stone-400" />
-                )}
-              </button>
-              {isOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-stone-100">
-                  {topic.items.map((item, i) => (
-                    <div key={i} className="p-3 rounded-xl bg-stone-50">
-                      <h4 className="font-medium text-stone-800 text-sm">{item.title}</h4>
-                      <p className="text-sm text-stone-600 mt-1">{item.desc}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const [tab, setTab] = useState<keyof typeof content>("Nutrition");
+  const Icon = icon[tab];
+  return <div className="mx-auto max-w-2xl space-y-4 pb-6">
+    <header><h1 className="text-xl font-bold text-stone-800">Health &amp; Nutrition</h1><p className="mt-1 text-sm text-stone-500">General guidance for your family</p></header>
+    <nav aria-label="Health topics" className="grid grid-cols-3 rounded-2xl bg-[#f0eee8] p-1">{(Object.keys(content) as (keyof typeof content)[]).map((key) => <button key={key} onClick={() => setTab(key)} className={`rounded-xl px-3 py-2 text-sm ${tab === key ? "bg-[#eaf3e8] font-semibold text-[#386d43]" : "text-stone-600"}`}>{key}</button>)}</nav>
+    <section className="rounded-3xl bg-[#eff5e9] p-5"><div className="flex items-center gap-2 text-[#386d43]"><Icon className="h-5 w-5"/><h2 className="font-semibold">{tab} guidance</h2></div><p className="mt-2 text-sm text-stone-600">Simple, general ideas to support your child’s wellbeing.</p></section>
+    <div className="space-y-3">{content[tab].map((item) => <details key={item.title} className="card group"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4"><span className="font-medium text-stone-800">{item.title}</span><ChevronRight className="h-5 w-5 text-stone-400 transition group-open:rotate-90"/></summary><p className="border-t border-stone-100 px-4 py-3 text-sm text-stone-600">{item.body}</p></details>)}</div>
+    <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><ShieldAlert className="h-5 w-5 shrink-0"/><p>This is general educational information, not individualized medical advice. Consult a pediatrician or qualified health worker for child-specific guidance.</p></div>
+  </div>;
 }

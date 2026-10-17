@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle } from "lucide-react";
-import type { SessionUser } from "@/lib/domain";
+import type { Message, SessionUser } from "@/lib/domain";
 import { formatDateTime } from "@/lib/utils";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildMessages } from "@/lib/selectors";
@@ -20,10 +20,40 @@ export function MessagesView({
 }) {
   const router = useRouter();
   const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
-  const childId = selectedChildId ?? children[0]?.id ?? "";
+  const childId = selectedChildId && children.some((child) => child.id === selectedChildId)
+    ? selectedChildId
+    : children[0]?.id ?? "";
   const messages = useStoreSelector((state) =>
     childId ? getChildMessages(state, childId) : [],
   );
+
+  const [databaseMode, setDatabaseMode] = useState(false);
+  const [databaseMessages, setDatabaseMessages] = useState<Message[]>([]);
+  const [loadError, setLoadError] = useState("");
+  const visibleMessages = databaseMode ? databaseMessages : messages;
+
+  const refreshMessages = useCallback(async () => {
+    if (!childId) return;
+    try {
+      if (await getConfiguredDataMode() !== "sqlite") { setDatabaseMode(false); return; }
+      setDatabaseMode(true);
+      const result = await apiFetch<Message[]>(`/api/messages?childId=${encodeURIComponent(childId)}`);
+      setDatabaseMessages(result);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Messages could not be loaded.");
+    }
+  }, [childId]);
+
+  useEffect(() => {
+    setDatabaseMessages([]);
+    setLoadError("");
+    void refreshMessages();
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshMessages(); }, 10_000);
+    const onFocus = () => void refreshMessages();
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [refreshMessages]);
 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -37,7 +67,7 @@ export function MessagesView({
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length]);
+  }, [visibleMessages.length]);
 
   async function send() {
     if (!text.trim() || !childId) return;
@@ -49,8 +79,11 @@ export function MessagesView({
         subject: "Message",
         body: text,
       };
-      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/messages", { method: "POST", body: JSON.stringify(input) });
-      else storeActions.addMessage(session, input);
+      if (await getConfiguredDataMode() === "sqlite") {
+        const created = await apiFetch<Message>("/api/messages", { method: "POST", body: JSON.stringify(input) });
+        setDatabaseMode(true);
+        setDatabaseMessages((current) => [...current.filter((message) => message.id !== created.id), created].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+      } else storeActions.addMessage(session, input);
       setText("");
     } catch {
       toast.error("Failed to send message.");
@@ -90,13 +123,14 @@ export function MessagesView({
               <p className="text-xs text-stone-500">{session.role === "PARENT" ? "Anganwadi Worker" : "Parent / Guardian"}</p>
             </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.length === 0 && (
+              {loadError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{loadError}</p>}
+              {visibleMessages.length === 0 && !loadError && (
                 <div className="text-center text-stone-400 mt-8">
                   <MessageCircle className="w-8 h-8 mx-auto mb-2" />
                   <p className="text-sm">No messages yet. Start the conversation.</p>
                 </div>
               )}
-              {messages.map((m) => {
+              {visibleMessages.map((m) => {
                 const isMine = m.direction === (session.role === "PARENT" ? "PARENT_TO_WORKER" : "WORKER_TO_PARENT");
                 return (
                   <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>

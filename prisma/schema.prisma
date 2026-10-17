@@ -43,6 +43,7 @@ model User {
   chatLogs          ChatLog[]
   auditLogs         AuditLog[]
   authSessions      AuthSession[]
+  notifications     Notification[] @relation("NotificationRecipient")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
@@ -119,6 +120,7 @@ model Child {
   predictions           MLPrediction[]
   attachments           AttachmentRecord[]
   chatLogs              ChatLog[]
+  notifications         Notification[]
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -407,6 +409,22 @@ model AuthSession {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId, revokedAt, expiresAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  childId     String?
+  type        String
+  title       String
+  body        String
+  readAt      DateTime?
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  child       Child?   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([childId, createdAt])
 }
 
 model RateLimitBucket {

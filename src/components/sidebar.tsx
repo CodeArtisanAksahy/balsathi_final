@@ -41,11 +41,13 @@ const workerNav: NavItem[] = [
   { href: "/children", label: "Children", icon: Users },
   { href: "/children/new", label: "Add Child", icon: UserPlus },
   { href: "/observations/new", label: "New Observation", icon: ClipboardList },
+  { href: "/growth", label: "Height & Weight", icon: TrendingUp },
   { href: "/observations/voice", label: "Voice Observation", icon: Mic },
   { href: "/observations/photo", label: "Photo Observation", icon: Camera },
   { href: "/milestones", label: "Milestones", icon: Activity },
   { href: "/worker/ai-insights", label: "AI Insights", icon: Brain },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles },
   { href: "/offline", label: "Offline & Sync", icon: Cloud },
@@ -60,6 +62,7 @@ const parentNav: NavItem[] = [
   { href: "/growth", label: "Growth", icon: TrendingUp },
   { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/parent/health", label: "Health & Nutrition", icon: HeartPulse },
   { href: "/help", label: "Help & Support", icon: HelpCircle },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles },
@@ -67,7 +70,7 @@ const parentNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/centers", label: "Centers", icon: Building2 },
   { href: "/admin/children", label: "Children", icon: Baby },

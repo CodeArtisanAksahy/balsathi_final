@@ -1,220 +1,140 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
-  Users,
-  ClipboardList,
-  AlertTriangle,
-  Mic,
-  Camera,
-  CheckSquare,
-  TrendingUp,
-  FileText,
-  Baby,
-  Building2,
-  UserCheck,
+  Users, ClipboardList, AlertTriangle, Mic, Camera, CheckSquare,
+  TrendingUp, FileText, Baby, Wifi, WifiOff,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
-import { domainLabel, getMessages } from "@/lib/i18n";
-import { formatDateTime, ageLabel } from "@/lib/utils";
+import { ageLabel } from "@/lib/utils";
 import { DomainTree } from "./domain-tree";
-import { AreaChartCard } from "./area-chart-card";
 import { useStoreSelector } from "@/hooks/use-store";
 import { getDashboardData, getRecentObservationChildren } from "@/lib/selectors";
+import { DevelopmentJourney } from "./development-journey";
+import { ParentDashboard } from "./parent-dashboard";
 
 type DashboardData = Awaited<ReturnType<typeof import("@/lib/data").getDashboardData>>;
 
-const statCards = [
-  { key: "totalChildren", sub: "In your scope", icon: Users, color: "bg-forest/10 text-forest" },
-  { key: "observationsThisWeek", sub: "Recorded this week", icon: ClipboardList, color: "bg-purple-100 text-purple-600" },
-  { key: "followUpChildren", sub: "Children with open follow-ups", icon: AlertTriangle, color: "bg-amber-100 text-amber-600" },
-];
-
 export function DashboardContent({ session, data: _initialData }: { session: SessionUser; data?: DashboardData }) {
-  const t = getMessages(session.preferredLanguage);
   const isParent = session.role === "PARENT";
-  const isAdmin = session.role === "CENTER_ADMIN" || session.role === "DISTRICT_ADMIN";
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
 
-  // Read live data from the reactive store
+  useEffect(() => {
+    const updateConnection = () => setIsOnline(navigator.onLine);
+    updateConnection();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    return () => {
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+    };
+  }, []);
+
+  // All counts and child details come from the caller's authorized store scope.
   const data = useStoreSelector((state) => getDashboardData(state, session));
   const recentObservationChildren = useStoreSelector((state) => getRecentObservationChildren(state, session));
 
   const quickActions = isParent
     ? [
-        { label: "Progress", icon: TrendingUp, href: "/children", color: "bg-forest/10 text-forest" },
-        { label: "Milestones", icon: CheckSquare, href: "/milestones", color: "bg-purple-100 text-purple-600" },
-        { label: "Activities", icon: Baby, href: "/recommendations", color: "bg-amber-100 text-amber-600" },
-        { label: "Messages", icon: ClipboardList, href: "/messages", color: "bg-blue-100 text-blue-600" },
-        { label: "Reports", icon: FileText, href: "/reports", color: "bg-rose-100 text-rose-600" },
+        { label: "Progress", icon: TrendingUp, href: "/children", color: "bg-[#e8f1e6] text-[#426c46]" },
+        { label: "Milestones", icon: CheckSquare, href: "/milestones", color: "bg-[#f0e9fa] text-[#8256b1]" },
+        { label: "Activities", icon: Baby, href: "/recommendations", color: "bg-[#fff0df] text-[#c8792b]" },
+        { label: "Messages", icon: ClipboardList, href: "/messages", color: "bg-[#e6f2f8] text-[#347ea6]" },
+        { label: "Reports", icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
       ]
     : [
-        { label: "Voice Observation", icon: Mic, href: "/observations/voice", color: "bg-forest/10 text-forest" },
-        { label: "Add Photo", icon: Camera, href: "/observations/photo", color: "bg-purple-100 text-purple-600" },
-        { label: "Milestone Check", icon: CheckSquare, href: "/milestones", color: "bg-amber-100 text-amber-600" },
-        { label: "Growth Entry", icon: TrendingUp, href: "/growth", color: "bg-blue-100 text-blue-600" },
-        { label: "Reports", icon: FileText, href: "/reports", color: "bg-rose-100 text-rose-600" },
+        { label: "Voice Observation", icon: Mic, href: "/observations/voice", color: "bg-[#e8f1e6] text-[#426c46]" },
+        { label: "Add Photo", icon: Camera, href: "/observations/photo", color: "bg-[#f0e9fa] text-[#8256b1]" },
+        { label: "Milestone Check", icon: CheckSquare, href: "/milestones", color: "bg-[#fff0df] text-[#c8792b]" },
+        { label: "Growth Entry", icon: TrendingUp, href: "/growth", color: "bg-[#e6f2f8] text-[#347ea6]" },
+        { label: "View Reports", icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
       ];
 
+  const cards = [
+    { label: isParent ? "My Children" : "Total Children", value: data.totalChildren, sub: "Registered", icon: Users, color: "bg-[#e8f1e6] text-[#426c46]", tint: "bg-[#fcfdfb]" },
+    { label: "Observations", value: data.observationsThisWeek, sub: "This week", icon: ClipboardList, color: "bg-[#f0e9fa] text-[#8256b1]", tint: "bg-[#fdfbff]" },
+    { label: isParent ? "Follow-ups" : "At Risk", value: data.followUpChildren, sub: "Needs attention", icon: AlertTriangle, color: "bg-[#fff0df] text-[#c8792b]", tint: "bg-[#fffdfa]" },
+    { label: "Offline Status", value: isOnline === null ? "Checking" : isOnline ? "Online" : "Offline", sub: "Network", icon: isOnline === false ? WifiOff : Wifi, color: isOnline === false ? "bg-[#fff0df] text-[#c8792b]" : "bg-[#e6f2f8] text-[#347ea6]", tint: "bg-[#fbfdfe]" },
+  ];
+  const displayedChildren = isParent && data.attentionChildren.length === 0
+    ? recentObservationChildren
+    : data.attentionChildren;
+
+  if (isParent) return <ParentDashboard session={session} />;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-stone-800">
-          Namaste, {session.name.split(" ")[0]}! 👋
-        </h2>
-        <p className="text-stone-500 text-sm mt-1">Every observation today shapes a better tomorrow.</p>
-      </div>
+    <div className="space-y-5 pb-6">
+      <header className="pt-1">
+        <h2 className="text-2xl font-bold text-stone-800">Namaste, {session.name.split(" ")[0]}! <span aria-hidden="true">👋</span></h2>
+        <p className="mt-1 text-sm text-stone-500">Every observation today shapes a better tomorrow.</p>
+      </header>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((card) => {
-          const Icon = card.icon;
-          const value = isAdmin && card.key === "totalChildren" ? (data as any).totalChildren : (data as any)[card.key] ?? 0;
-          return (
-            <div key={card.key} className="card p-4 card-hover">
-              <div className="flex items-start justify-between">
-                <div className={`w-11 h-11 rounded-xl ${card.color} flex items-center justify-center`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="text-2xl font-bold text-stone-800">{value}</div>
-              <div className="text-xs text-stone-500">{card.sub}</div>
+      <section aria-label="Dashboard summary" className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-4 sm:gap-3">
+        {cards.map(({ label, value, sub, icon: Icon, color, tint }) => (
+          <div key={label} className={`card card-hover min-w-0 border-[#e9e5d9] p-2 sm:p-3 ${tint}`}>
+            <div className="flex items-center gap-2">
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${color}`}><Icon className="h-4 w-4" /></span>
+              <div className="min-w-0">
+                <span className="block text-[9px] font-medium leading-tight text-stone-500 sm:text-[11px]">{label}</span>
+                <div className="mt-0.5 text-lg font-bold leading-tight text-stone-800 sm:text-2xl">{value}</div>
+                <p className="text-[9px] leading-tight text-stone-500 sm:text-[10px]">{sub}</p>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Admin extra stats */}
-      {isAdmin && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Total Centers", value: (data as any).totalCenters ?? 0, icon: Building2, color: "bg-sage-light text-forest" },
-            { label: "Active Workers", value: (data as any).activeWorkers ?? 0, icon: UserCheck, color: "bg-blue-100 text-blue-600" },
-            { label: "Registered Parents", value: (data as any).registeredParents ?? 0, icon: Users, color: "bg-purple-100 text-purple-600" },
-            { label: "Pending Review", value: (data as any).pendingReview ?? 0, icon: AlertTriangle, color: "bg-amber-100 text-amber-600" },
-          ].map((s) => {
-            const Icon = s.icon;
-            return (
-              <div key={s.label} className="card p-4 card-hover">
-                <div className={`w-10 h-10 rounded-xl ${s.color} flex items-center justify-center mb-2`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="text-2xl font-bold text-stone-800">{s.value}</div>
-                <div className="text-xs text-stone-500">{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Development overview */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-stone-800">Development Overview</h3>
-            <span className="text-xs text-stone-400">Domain-wise</span>
           </div>
-          <DomainTree domainOverview={data.domainOverview} locale={session.preferredLanguage} />
+        ))}
+      </section>
+
+      <DevelopmentJourney session={session} />
+
+      <section aria-label="Development and follow-ups" className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 sm:gap-4">
+        <div className="card p-4 sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div><h3 className="font-semibold text-stone-800">Development Overview</h3><p className="text-[10px] text-stone-400">Domain-wise</p></div>
+          </div>
+          <div className="grid grid-cols-[minmax(76px,0.7fr)_minmax(0,1.5fr)] items-center gap-3 sm:gap-5">
+            <div className="flex justify-center" aria-hidden="true">
+              <svg viewBox="0 0 120 160" className="h-36 w-full max-w-28" role="presentation">
+                <path d="M60 146V75m0 34L32 82m28 42 30-34M60 91 48 56m12 25 20-34" fill="none" stroke="#8b6b42" strokeLinecap="round" strokeWidth="5" />
+                <circle cx="60" cy="40" r="18" fill="#a7c78c" /><circle cx="37" cy="59" r="17" fill="#bdd69f" /><circle cx="83" cy="60" r="18" fill="#9fbe7d" />
+                <circle cx="32" cy="82" r="13" fill="#f7bd86" /><circle cx="91" cy="83" r="13" fill="#f5d276" /><circle cx="48" cy="55" r="11" fill="#c9b4e6" /><circle cx="80" cy="48" r="11" fill="#aad4df" />
+                <circle cx="60" cy="40" r="4" fill="#547d3b" /><circle cx="32" cy="82" r="4" fill="#d87d63" /><circle cx="91" cy="83" r="4" fill="#ddaa36" />
+                <path d="M22 147h76" stroke="#c9d9bb" strokeLinecap="round" strokeWidth="5" />
+              </svg>
+            </div>
+            <DomainTree domainOverview={data.domainOverview} locale={session.preferredLanguage} />
+          </div>
         </div>
 
-        {/* Children needing attention */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-stone-800">
-              {isParent ? "Recent Updates" : "Children Needing Attention"}
-            </h3>
-            <Link href="/children" className="text-xs text-forest font-medium hover:underline">View All</Link>
+        <div className="card p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h3 className="font-semibold text-stone-800">{isParent ? "Recent Updates" : "Children Needing Attention"}</h3><p className="text-[11px] text-stone-400">{isParent ? "Recent activity for your linked children" : "Children in your authorized scope"}</p></div>
+            <Link href="/children" className="shrink-0 text-xs font-medium text-forest hover:underline">View All</Link>
           </div>
-          <div className="space-y-3">
-            {(data.attentionChildren.length > 0 ? data.attentionChildren.slice(0, 3) : recentObservationChildren).map((item, i) => (
-              <Link key={i} href={`/children/${item.child?.id ?? "#"}`} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-stone-50 transition">
-                <div className="w-10 h-10 rounded-full bg-forest/15 flex items-center justify-center text-forest font-semibold text-sm flex-shrink-0">
-                  {item.child?.fullName?.slice(0, 2).toUpperCase() ?? "??"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-stone-800 truncate">{item.child?.fullName ?? "Unknown"}</div>
-                  <div className="text-xs text-stone-500 truncate">
-                    {item.child ? ageLabel(item.child.dateOfBirth) : ""}
-                    {item.risks?.length ? ` • ${item.risks[0]?.title ?? "Follow-up"}` : ""}
-                  </div>
-                </div>
-                {item.risks?.length > 0 && (
-                  <span className="badge bg-amber-light text-amber-700">{item.risks[0]?.level ?? "MODERATE"}</span>
-                )}
+          {displayedChildren.length > 0 ? <div className="divide-y divide-stone-100">
+            {displayedChildren.slice(0, 4).map((item, i) => (
+              <Link key={item.child?.id ?? i} href={item.child?.id ? `/children/${item.child.id}` : "/children"} className="flex items-center gap-3 py-3 transition hover:bg-stone-50">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${["bg-[#e8f1e6] text-[#426c46]", "bg-[#f0e9fa] text-[#8256b1]", "bg-[#fff0df] text-[#a86120]", "bg-[#e6f2f8] text-[#347ea6]"][i % 4]}`}>{item.child?.fullName?.slice(0, 2).toUpperCase() ?? "??"}</div>
+                <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-stone-800">{item.child?.fullName ?? "Child"}</div><div className="truncate text-xs text-stone-500">{item.child ? ageLabel(item.child.dateOfBirth) : ""}{item.risks?.length ? ` • ${item.risks[0]?.title ?? "Follow-up"}` : isParent ? " • Recent observation" : " • Follow-up review"}</div></div>
+                {item.risks?.length > 0 && <span className={`badge shrink-0 ${item.risks[0]?.level === "HIGH" ? "bg-[#fde8e5] text-[#b64037]" : item.risks[0]?.level === "LOW" ? "bg-[#e8f1e6] text-[#426c46]" : "bg-[#fff0df] text-[#a86120]"}`}>{item.risks[0]?.level ?? "MODERATE"}</span>}
               </Link>
             ))}
-            {data.attentionChildren.length === 0 && data.recentObservations.length === 0 && (
-              <p className="text-sm text-stone-400 text-center py-4">No records yet.</p>
-            )}
-          </div>
+          </div> : <p className="py-8 text-center text-sm text-stone-400">{isParent ? "No recent updates yet." : "No children currently need attention."}</p>}
         </div>
-      </div>
+      </section>
 
-      {/* Recent observations */}
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-stone-800">Recently Recorded Observations</h3>
-          <Link href="/observations/new" className="text-xs text-forest font-medium hover:underline">+ New</Link>
-        </div>
-        <div className="space-y-2">
-          {data.recentObservations.slice(0, 4).map((obs: any) => (
-            <div key={obs.id} className="flex items-start gap-3 p-3 rounded-xl bg-stone-50/60">
-              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${obs.followUpRequired ? "bg-amber-500" : "bg-forest"}`} />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm text-stone-700 line-clamp-1">{obs.observationText}</div>
-                <div className="text-xs text-stone-400 mt-0.5">
-                  {domainLabel(obs.domain, session.preferredLanguage)} • {formatDateTime(obs.observedAt, session.preferredLanguage)}
-                </div>
-              </div>
-            </div>
+      <section className="card p-4 sm:p-5">
+        <h3 className="mb-3 font-semibold text-stone-800">Quick Actions</h3>
+        <div className="grid grid-cols-5 gap-1 sm:gap-3">
+          {quickActions.map(({ label, icon: Icon, href, color }) => (
+            <Link key={label} href={href} className="flex min-w-0 flex-col items-center gap-2 rounded-xl p-2 text-center transition hover:bg-stone-50 sm:p-3">
+              <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${color}`}><Icon className="h-5 w-5" /></span>
+              <span className="text-[10px] font-medium leading-tight text-stone-600 sm:text-xs">{label}</span>
+            </Link>
           ))}
-          {data.recentObservations.length === 0 && (
-            <p className="text-sm text-stone-400 text-center py-4">No observations yet.</p>
-          )}
         </div>
-      </div>
+      </section>
 
-      {/* Quick actions */}
-      <div className="card p-5">
-        <h3 className="font-semibold text-stone-800 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-5 gap-3">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link key={action.label} href={action.href} className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-stone-50 transition">
-                <div className={`w-12 h-12 rounded-2xl ${action.color} flex items-center justify-center`}>
-                  <Icon className="w-6 h-6" />
-                </div>
-                <span className="text-xs text-stone-600 text-center font-medium">{action.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Upcoming milestone reviews */}
-      {data.upcomingMilestoneReviews.length > 0 && (
-        <div className="card p-5">
-          <h3 className="font-semibold text-stone-800 mb-4">Upcoming Milestone Reviews</h3>
-          <div className="space-y-2">
-            {data.upcomingMilestoneReviews.slice(0, 3).map((a: any) => (
-              <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-stone-50/60">
-                <div>
-                  <div className="text-sm font-medium text-stone-700">Milestone assessment</div>
-                  <div className="text-xs text-stone-400">{formatDateTime(a.assessedAt, session.preferredLanguage)}</div>
-                </div>
-                <span className={`badge ${a.status === "NEEDS_REVIEW" ? "bg-amber-light text-amber-700" : "bg-blue-100 text-blue-600"}`}>
-                  {a.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Analytics chart for admin/worker */}
-      {!isParent && <AreaChartCard session={session} />}
     </div>
   );
 }

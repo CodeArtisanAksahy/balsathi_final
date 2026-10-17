@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import type { SessionUser, GrowthMeasurement, Child } from "@/lib/domain";
@@ -15,13 +15,20 @@ import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 export function GrowthComparison({
   session,
   selectedChildId,
+  initialChildren = [],
+  sqliteMode = false,
 }: {
   session: SessionUser;
   selectedChildId?: string;
+  initialChildren?: Pick<Child, "id" | "fullName">[];
+  sqliteMode?: boolean;
 }) {
   const router = useRouter();
-  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
-  const childId = selectedChildId ?? children[0]?.id ?? "";
+  const demoChildren = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const children = sqliteMode ? initialChildren : demoChildren;
+  const childId = (selectedChildId && children.some((child) => child.id === selectedChildId)
+    ? selectedChildId
+    : children[0]?.id) ?? "";
   const [metric, setMetric] = useState<"height" | "weight">("weight");
   const [measuredAt, setMeasuredAt] = useState("");
   const [weightKg, setWeightKg] = useState("");
@@ -33,14 +40,30 @@ export function GrowthComparison({
   }
 
   const selectedChild = children.find((c) => c.id === childId) ?? null;
-  const growth = useStoreSelector((state) =>
-    childId ? getChildGrowth(state, childId) : [],
-  );
+  const demoGrowth = useStoreSelector((state) => childId ? getChildGrowth(state, childId) : []);
+  const [databaseGrowth, setDatabaseGrowth] = useState<GrowthMeasurement[]>([]);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (!sqliteMode || !childId) return;
+    let cancelled = false;
+    setLoadError("");
+    apiFetch<GrowthMeasurement[]>(`/api/growth?childId=${encodeURIComponent(childId)}`)
+      .then((rows) => { if (!cancelled) setDatabaseGrowth(rows); })
+      .catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Could not load growth measurements."); });
+    return () => { cancelled = true; };
+  }, [sqliteMode, childId]);
+  const growth = sqliteMode ? databaseGrowth : demoGrowth;
+  const parentNotice = session.role === "PARENT" ? (
+    <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+      You can view recorded height and weight here. An Anganwadi worker records official measurements for your child.
+    </div>
+  ) : null;
 
   if (children.length === 0) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
+        {parentNotice}
         <div className="card p-12 text-center text-stone-500">No children available.</div>
       </div>
     );
@@ -50,6 +73,7 @@ export function GrowthComparison({
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
+        {parentNotice}
         <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
         <div className="card p-12 text-center text-stone-500">Select a child to view growth data.</div>
       </div>
@@ -67,8 +91,12 @@ export function GrowthComparison({
     setSaving(true);
     const payload = { childId, measuredAt: new Date(`${measuredAt}T12:00:00`).toISOString(), heightCm: Number(heightCm), weightKg: Number(weightKg), headCircumferenceCm: null, notes: null };
     try {
-      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/growth", { method: "POST", body: JSON.stringify(payload) });
-      else storeActions.addGrowthMeasurement(session, payload);
+      if (await getConfiguredDataMode() === "sqlite") {
+        const saved = await apiFetch<GrowthMeasurement>("/api/growth", { method: "POST", body: JSON.stringify(payload) });
+        setDatabaseGrowth((current) => [...current, saved].sort((left, right) => left.measuredAt.localeCompare(right.measuredAt)));
+      } else {
+        storeActions.addGrowthMeasurement(session, payload);
+      }
       toast.success("Growth measurement saved.");
       setMeasuredAt(""); setHeightCm(""); setWeightKg("");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save measurement."); }
@@ -86,6 +114,8 @@ export function GrowthComparison({
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-stone-800">Growth Comparison</h1>
+
+      {parentNotice}
 
       <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
 
@@ -124,6 +154,7 @@ export function GrowthComparison({
       </div>
 
       {/* Chart */}
+      {loadError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}</div>}
       <div className="card p-5">
         <h3 className="font-semibold text-stone-800 mb-4">{metric === "weight" ? "Weight" : "Height"} Over Time</h3>
         {data.length > 0 ? (
@@ -177,7 +208,7 @@ export function GrowthComparison({
   );
 }
 
-function ChildSelector({ children, selectedId, onSelect }: { children: Child[]; selectedId: string; onSelect: (id: string) => void }) {
+function ChildSelector({ children, selectedId, onSelect }: { children: Array<Pick<Child, "id" | "fullName">>; selectedId: string; onSelect: (id: string) => void }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-2">
       {children.map((c) => (

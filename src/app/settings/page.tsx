@@ -62,7 +62,7 @@ export default function SettingsPage() {
           </button>
         ))}</div>
       </div>
-      <div className="card p-6 space-y-2"><div className="flex items-center gap-2"><Bell className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Notifications</h3></div><p className="text-sm text-stone-600">Notification preferences and delivery are not configured for this deployment.</p></div>
+      <div className="card p-6 space-y-2"><div className="flex items-center gap-2"><Bell className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Notifications</h3></div><p className="text-sm text-stone-600">In-app notifications are available from the bell and Notifications page. Email delivery is not configured.</p></div>
       <div className="card p-6 space-y-3"><div className="flex items-center gap-2"><Shield className="w-5 h-5 text-forest" /><h3 className="font-semibold text-stone-800">Security</h3></div><p className="text-sm text-stone-600">Password changes and two-factor authentication are unavailable. Contact your administrator to update account access.</p><button onClick={signOut} className="btn-secondary w-full text-left justify-start text-risk-red border-risk-red/30 hover:bg-risk-red-light"><LogOut className="w-4 h-4" /> Sign Out</button></div>
     </div>
   );
