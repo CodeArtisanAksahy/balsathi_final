@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { createDemoData } from "../src/lib/demo-data";
 
 const prisma = new PrismaClient({ datasources: { db: { url: "file:./dev.db" } } });
 
@@ -47,8 +48,31 @@ async function main() {
       siblingIds: [],
     },
   });
-  const ms = await prisma.milestoneDefinition.findFirst();
-  console.log("Seeded dev.db successfully. Milestone defs:", ms ? "yes" : "none (seed data does not include them)");
+  const milestones = createDemoData().milestoneDefinitions;
+  for (const milestone of milestones) {
+    const definition = {
+      domain: milestone.domain,
+      titleEn: milestone.title.en,
+      titleHi: milestone.title.hi,
+      titleMr: milestone.title.mr,
+      descriptionEn: milestone.description.en,
+      descriptionHi: milestone.description.hi,
+      descriptionMr: milestone.description.mr,
+      minAgeMonths: milestone.minAgeMonths,
+      maxAgeMonths: milestone.maxAgeMonths,
+      reviewAfterMonths: milestone.reviewAfterMonths,
+      activitiesEn: milestone.activities.en,
+      activitiesHi: milestone.activities.hi,
+      activitiesMr: milestone.activities.mr,
+      active: milestone.active,
+    };
+    await prisma.milestoneDefinition.upsert({
+      where: { slug: milestone.slug },
+      update: definition,
+      create: { id: milestone.id, slug: milestone.slug, ...definition },
+    });
+  }
+  console.log(`Seeded dev.db successfully. Milestone definitions: ${milestones.length}`);
   console.log("Accounts created:");
   console.log("  district@demo.balsathi / Admin@123  — District Admin");
   console.log("  admin@demo.balsathi    / Admin@123  — Center Admin (Sunshine)");

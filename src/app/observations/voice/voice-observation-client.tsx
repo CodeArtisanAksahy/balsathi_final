@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, MicOff, Save, Loader2, Play, Pause, Square, ArrowLeft } from "lucide-react";
+import { Mic, Save, Play, Pause, Square, ArrowLeft } from "lucide-react";
 import type { SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
 import { getConfiguredDataMode } from "@/lib/fetch";
@@ -108,7 +108,8 @@ function VoiceObservationInner() {
   }
 
   async function save() {
-    if (!observationText.trim()) { setError("Please enter observation notes."); return; }
+    if (!childId) { setError("Select a child first."); return; }
+    if (observationText.trim().length < 5) { setError("Observation notes must be at least 5 characters."); return; }
     setSaving(true);
     setError("");
     try {
@@ -234,7 +235,7 @@ function VoiceObservationInner() {
         </div>
 
         <div>
-          <label className="label">Activity Context</label>
+          <label className="label">Activity Context (optional)</label>
           <input className="input" value={activityContext} onChange={(e) => setActivityContext(e.target.value)} placeholder="e.g., Group play" />
         </div>
 
@@ -244,7 +245,7 @@ function VoiceObservationInner() {
         </div>
 
         <div className="flex justify-end">
-          <button onClick={() => { if (!childId) { setError("Select a child first."); return; } if (!observationText.trim()) { setError("Please enter observation notes."); return; } setError(""); setReviewing(true); }} disabled={saving} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#24733d] px-4 font-semibold text-white hover:bg-[#1d6033] disabled:opacity-60">
+          <button onClick={() => { if (!childId) { setError("Select a child first."); return; } if (observationText.trim().length < 5) { setError("Observation notes must be at least 5 characters."); return; } setError(""); setReviewing(true); }} disabled={saving} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#24733d] px-4 font-semibold text-white hover:bg-[#1d6033] disabled:opacity-60">
             <Save className="w-4 h-4" /> Review Observation
           </button>
         </div>

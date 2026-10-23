@@ -46,8 +46,8 @@ export function SignupForm() {
   if (submitted) {
     return <section className="card px-6 py-10 text-center shadow-xl sm:px-10">
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e9f4e7] text-forest"><CheckCircle2 className="h-8 w-8" /></span>
-      <h1 className="mt-5 text-2xl font-bold text-stone-800">Request submitted</h1>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">Your details are with the Balsathi administrator for verification. You’ll receive your account setup instructions after they confirm your information.</p>
+      <h1 className="mt-5 text-2xl font-bold text-stone-800">Request saved for review</h1>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">Your signup details are saved for an administrator to review. This request is not an active login yet. After the administrator verifies your center or child connection and creates your account, they’ll share your initial password so you can sign in and use the app.</p>
       <Link href="/login" className="btn-primary mx-auto mt-6 justify-center">Back to sign in</Link>
     </section>;
   }

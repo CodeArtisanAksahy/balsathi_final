@@ -52,7 +52,7 @@ export const observationCreateSchema = z.object({
   method: z.enum(observationMethods),
   observationLanguage: z.enum(appLocales),
   domain: z.enum(developmentDomains),
-  activityContext: z.string().trim().min(2).max(200),
+  activityContext: z.string().trim().max(200).default(""),
   observationText: z.string().trim().min(5).max(4000),
   workerNotes: z.string().trim().max(2000).default(""),
   aiTranscript: z.string().trim().max(4000).nullable().optional(),

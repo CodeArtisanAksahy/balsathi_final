@@ -412,6 +412,23 @@ const seed: DemoData = {
       ["बारी-बारी से खेल", "गेंद पास करने की गतिविधि"],
       ["पालीने खेळ", "चेंडू पास करण्याची कृती"],
     ),
+    milestone(
+      "milestone-4",
+      "plans-steps-to-solve-simple-problems",
+      "COGNITIVE",
+      60,
+      72,
+      72,
+      "Plans steps to solve simple problems",
+      "सरल समस्याओं को हल करने के लिए कदम सोचता है",
+      "सोप्या समस्या सोडवण्यासाठी पायऱ्या ठरवतो",
+      "Observe whether the child can plan and try a simple sequence to complete a familiar task.",
+      "देखें कि बच्चा किसी परिचित काम को पूरा करने के लिए सरल क्रम सोचकर आज़मा सकता है या नहीं।",
+      "ओळखीचे काम पूर्ण करण्यासाठी मुलगा किंवा मुलगी साधा क्रम ठरवून प्रयत्न करतो का ते पाहा.",
+      ["Ask the child how to build a taller block tower", "Offer a simple puzzle and notice the steps the child tries"],
+      ["पूछें कि ऊँचा ब्लॉक टावर कैसे बनाएँ", "सरल पहेली देकर बच्चे के प्रयास के कदम देखें"],
+      ["उंच ब्लॉकचा मनोरा कसा बांधाल ते विचारा", "साधे कोडे देऊन मुलाने वापरलेल्या पायऱ्या पाहा"],
+    ),
   ],
   milestoneAssessments: [
     {

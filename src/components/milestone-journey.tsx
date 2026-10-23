@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle, Clock, Target, ArrowLeft, Check, Loader2, Baby, Hand, MessageCircle, BookOpen, Activity, Heart, Brain, ListChecks } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Target, ArrowLeft, Check, Loader2, BookOpen, Heart, ListChecks } from "lucide-react";
 import type { SessionUser, MilestoneAssessment, AssessmentStatus, MilestoneDefinition, DevelopmentDomain } from "@/lib/domain";
 import { cn } from "@/lib/utils";
 import { domainLabel } from "@/lib/i18n";
@@ -10,7 +10,7 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildMilestoneAssessments } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
-import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
+import { apiFetch } from "@/lib/fetch";
 import Image from "next/image";
 
 const ageBrackets = [
@@ -20,17 +20,22 @@ const ageBrackets = [
   { label: "4–5 yrs", min: 48, max: 60 },
   { label: "5–6 yrs", min: 60, max: 72 },
 ];
+function ageBracketFor(dateOfBirth?: string) {
+  if (!dateOfBirth) return 0;
+  const ageMonths = Math.max(0, (Date.now() - new Date(dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 30.4375));
+  const index = ageBrackets.findIndex((bracket) => ageMonths >= bracket.min && ageMonths < bracket.max);
+  return index < 0 ? ageBrackets.length - 1 : index;
+}
 const statusOptions: Array<{ value: AssessmentStatus; label: string; className: string; icon: typeof CheckCircle2 }> = [
   { value: "MET", label: "Achieved", className: "border-green-200 bg-green-50 text-green-800", icon: CheckCircle2 },
   { value: "IN_PROGRESS", label: "In Progress", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock },
   { value: "NOT_OBSERVED", label: "Not Yet", className: "border-rose-200 bg-rose-50 text-rose-800", icon: Heart },
   { value: "NEEDS_REVIEW", label: "Not Sure", className: "border-stone-200 bg-stone-50 text-stone-700", icon: Circle },
 ];
-const domainIcons: Record<DevelopmentDomain, typeof Activity> = { PHYSICAL: Activity, COGNITIVE: Brain, LANGUAGE: MessageCircle, SOCIAL: Hand, EMOTIONAL: Heart };
-
-export function MilestoneJourney({ session, selectedChildId }: { session: SessionUser; selectedChildId?: string }) {
+export function MilestoneJourney({ session, selectedChildId, sqliteMode = false, initialChildren = [] }: { session: SessionUser; selectedChildId?: string; sqliteMode?: boolean; initialChildren?: Array<{ id: string; fullName: string; dateOfBirth: string }> }) {
   const router = useRouter();
-  const children = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const demoChildren = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const children = sqliteMode ? initialChildren : demoChildren;
   // Server and hydrated client stores can briefly contain different child
   // snapshots. Only honor the query selection when it exists in this user's
   // currently authorized client list; otherwise use the first authorized child.
@@ -42,7 +47,7 @@ export function MilestoneJourney({ session, selectedChildId }: { session: Sessio
   const storeAssessments = useStoreSelector((state) => childId ? getChildMilestoneAssessments(state, childId) : []);
   const [definitionsFromApi, setDefinitionsFromApi] = useState<MilestoneDefinition[]>([]);
   const [assessmentsFromApi, setAssessmentsFromApi] = useState<MilestoneAssessment[]>([]);
-  const [ageTab, setAgeTab] = useState(0);
+  const [ageTab, setAgeTab] = useState(() => ageBracketFor(selectedChild?.dateOfBirth));
   const [view, setView] = useState<"age" | "domain">("age");
   const [selectedDomain, setSelectedDomain] = useState<DevelopmentDomain>("PHYSICAL");
   const [editing, setEditing] = useState<MilestoneDefinition | null>(null);
@@ -50,21 +55,18 @@ export function MilestoneJourney({ session, selectedChildId }: { session: Sessio
   const [editNote, setEditNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [sqliteMode, setSqliteMode] = useState(false);
-  const definitions = definitionsFromApi.length ? definitionsFromApi : storeDefinitions;
+  const definitions = sqliteMode ? definitionsFromApi : storeDefinitions;
   const assessments = sqliteMode ? assessmentsFromApi : storeAssessments;
 
   useEffect(() => {
-    let alive = true;
-    getConfiguredDataMode().then((mode) => { if (alive) setSqliteMode(mode === "sqlite"); }).catch(() => undefined);
-    return () => { alive = false; };
-  }, []);
+    setAgeTab(ageBracketFor(selectedChild?.dateOfBirth));
+  }, [childId, selectedChild?.dateOfBirth]);
   useEffect(() => {
     if (!childId) return;
     let alive = true;
     apiFetch<{ definitions: MilestoneDefinition[]; assessments?: MilestoneAssessment[] }>(`/api/milestones?childId=${encodeURIComponent(childId)}`)
       .then((data) => { if (alive) { setDefinitionsFromApi(data.definitions ?? []); setAssessmentsFromApi(data.assessments ?? []); } })
-      .catch(() => { if (alive) setError("Milestones could not be refreshed from the server. Showing the available saved data."); });
+      .catch(() => { if (alive) setError("Milestones could not be loaded from the server. Please refresh and try again."); });
     return () => { alive = false; };
   }, [childId]);
 
@@ -81,7 +83,7 @@ export function MilestoneJourney({ session, selectedChildId }: { session: Sessio
     if (!editing || !childId) return;
     setSaving(true); setError("");
     try {
-      if (await getConfiguredDataMode() === "sqlite") {
+      if (sqliteMode) {
         const saved = await apiFetch<MilestoneAssessment>("/api/milestones", { method: "POST", body: JSON.stringify({ childId, milestoneId: editing.id, status: editStatus, notes: editNote }) });
         setAssessmentsFromApi((previous) => [saved, ...previous.filter((a) => a.milestoneId !== editing.id)]);
       } else {

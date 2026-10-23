@@ -18,5 +18,5 @@ export default async function GrowthPage({
     : getAuthorizedChildren(session);
   const childId = params.childId ?? children[0]?.id ?? "";
   if (session.role === "PARENT") return <ParentGrowthJourney session={session} selectedChildId={childId} />;
-  return <GrowthComparison session={session} selectedChildId={childId} initialChildren={children.map(({ id, fullName }) => ({ id, fullName }))} sqliteMode={config.dataMode === "sqlite"} />;
+  return <GrowthComparison session={session} selectedChildId={childId} initialChildren={children.map(({ id, fullName, dateOfBirth }) => ({ id, fullName, dateOfBirth: typeof dateOfBirth === "string" ? dateOfBirth : dateOfBirth.toISOString() }))} sqliteMode={config.dataMode === "sqlite"} />;
 }

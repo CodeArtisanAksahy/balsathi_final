@@ -20,7 +20,7 @@ export function GrowthComparison({
 }: {
   session: SessionUser;
   selectedChildId?: string;
-  initialChildren?: Pick<Child, "id" | "fullName">[];
+  initialChildren?: Pick<Child, "id" | "fullName" | "dateOfBirth">[];
   sqliteMode?: boolean;
 }) {
   const router = useRouter();
@@ -30,7 +30,11 @@ export function GrowthComparison({
     ? selectedChildId
     : children[0]?.id) ?? "";
   const [metric, setMetric] = useState<"height" | "weight">("weight");
-  const [measuredAt, setMeasuredAt] = useState("");
+  const [measuredAt, setMeasuredAt] = useState(() => {
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    return today.toISOString().slice(0, 10);
+  });
   const [weightKg, setWeightKg] = useState("");
   const [heightCm, setHeightCm] = useState("");
   const [saving, setSaving] = useState(false);
@@ -40,6 +44,11 @@ export function GrowthComparison({
   }
 
   const selectedChild = children.find((c) => c.id === childId) ?? null;
+  const todayInputValue = (() => {
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    return today.toISOString().slice(0, 10);
+  })();
   const demoGrowth = useStoreSelector((state) => childId ? getChildGrowth(state, childId) : []);
   const [databaseGrowth, setDatabaseGrowth] = useState<GrowthMeasurement[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -120,7 +129,7 @@ export function GrowthComparison({
       <ChildSelector children={children} selectedId={childId} onSelect={selectChild} />
 
       {session.role !== "PARENT" && <form onSubmit={saveMeasurement} className="card p-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <input className="input" type="date" value={measuredAt} onChange={(event) => setMeasuredAt(event.target.value)} required aria-label="Measurement date" />
+        <input className="input" type="date" min={selectedChild?.dateOfBirth.slice(0, 10)} max={todayInputValue} value={measuredAt} onChange={(event) => setMeasuredAt(event.target.value)} required aria-label="Measurement date" />
         <input className="input" type="number" min="1" max="180" step="0.1" placeholder="Weight (kg)" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} required />
         <input className="input" type="number" min="30" max="220" step="0.1" placeholder="Height (cm)" value={heightCm} onChange={(event) => setHeightCm(event.target.value)} required />
         <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save measurement"}</button>

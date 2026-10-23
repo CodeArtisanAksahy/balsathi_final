@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 type DemoRole = {
   email: string;
+  password: string;
   label: string;
   description: string;
   icon: typeof UserRound;
@@ -16,6 +17,7 @@ type DemoRole = {
 const demoRoles: DemoRole[] = [
   {
     email: "worker@balsathi.demo",
+    password: "balsathi123",
     label: "Anganwadi Worker",
     description: "Record observations, track milestones, view child profiles",
     icon: UserRound,
@@ -23,6 +25,7 @@ const demoRoles: DemoRole[] = [
   },
   {
     email: "parent@balsathi.demo",
+    password: "balsathi123",
     label: "Parent / Guardian",
     description: "View child progress, messages, and home activities",
     icon: Users,
@@ -30,6 +33,7 @@ const demoRoles: DemoRole[] = [
   },
   {
     email: "admin@balsathi.demo",
+    password: "balsathi123",
     label: "Administrator",
     description: "Manage users, centers, analytics, and audit logs",
     icon: ShieldCheck,
@@ -37,7 +41,34 @@ const demoRoles: DemoRole[] = [
   },
 ];
 
-export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
+const localDemoRoles: DemoRole[] = [
+  {
+    email: "worker@demo.balsathi",
+    password: "Admin@123",
+    label: "Anganwadi Worker",
+    description: "Record observations, track milestones, view child profiles",
+    icon: UserRound,
+    color: "bg-forest/10 text-forest border-forest/30",
+  },
+  {
+    email: "parent@demo.balsathi",
+    password: "Admin@123",
+    label: "Parent / Guardian",
+    description: "View child progress, messages, and home activities",
+    icon: Users,
+    color: "bg-blue-100 text-blue-600 border-blue-300",
+  },
+  {
+    email: "district@demo.balsathi",
+    password: "Admin@123",
+    label: "Administrator",
+    description: "Manage users, centers, analytics, and audit logs",
+    icon: ShieldCheck,
+    color: "bg-purple-100 text-purple-600 border-purple-300",
+  },
+];
+
+export function LoginForm({ dataMode, showLocalDemoAccounts = false }: { dataMode: "demo" | "sqlite"; showLocalDemoAccounts?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +77,8 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [passwordHelp, setPasswordHelp] = useState(false);
+  const quickLoginRoles = dataMode === "demo" ? demoRoles : localDemoRoles;
+  const showQuickLogin = dataMode === "demo" || showLocalDemoAccounts;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,14 +107,14 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
   async function quickLogin(role: DemoRole) {
     setSelectedRole(role.email);
     setEmail(role.email);
-    setPassword("balsathi123");
+    setPassword(role.password);
     setError("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: role.email, password: "balsathi123", locale: "en" }),
+        body: JSON.stringify({ email: role.email, password: role.password, locale: "en" }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -100,11 +133,10 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
 
   return (
     <div className="space-y-5">
-      {/* Demo role cards are unavailable for real database accounts. */}
-      {dataMode === "demo" && <div>
+      {showQuickLogin && <div>
         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Quick Demo Login</p>
         <div className="grid grid-cols-3 gap-2">
-          {demoRoles.map((role) => {
+          {quickLoginRoles.map((role) => {
             const Icon = role.icon;
             return (
               <button
@@ -130,7 +162,7 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
           })}
         </div>
         <p className="text-[11px] text-stone-400 text-center mt-2">
-          Click a role to instantly log in with the demo account
+          Click a role to sign in with a demo account
         </p>
       </div>}
 
@@ -198,8 +230,8 @@ export function LoginForm({ dataMode }: { dataMode: "demo" | "sqlite" }) {
         </button>
       </form>
 
-      {dataMode === "demo" && <p className="text-center text-xs text-stone-400">
-        Demo password for all accounts: <span className="font-mono font-medium">balsathi123</span>
+      {showQuickLogin && <p className="text-center text-xs text-stone-400">
+        Demo password: <span className="font-mono font-medium">{dataMode === "demo" ? "balsathi123" : "Admin@123"}</span>
       </p>}
     </div>
   );

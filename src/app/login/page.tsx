@@ -19,22 +19,15 @@ export default async function LoginPage() {
           </div>
           <h1 className="text-3xl font-bold text-stone-800">Balsathi AI</h1>
           <p className="text-stone-500 text-sm mt-1">Nurturing Every Child&apos;s Development Through AI</p>
-          <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full bg-amber-light text-amber-700 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            {config.dataMode === "demo" ? "Demo Mode — Synthetic data for demonstration" : "SQLite mode — local database accounts required"}
-          </div>
         </div>
         <div className="card p-6 shadow-xl">
-          <LoginForm dataMode={config.dataMode} />
+          <LoginForm dataMode={config.dataMode} showLocalDemoAccounts={!config.isProduction && config.dataMode === "sqlite"} />
         </div>
         <p className="mt-5 text-center text-sm text-stone-500">
           New to Balsathi?{" "}
           <Link href="/create-account" className="font-semibold text-forest hover:underline">
             Create an account
           </Link>
-        </p>
-        <p className="text-center text-xs text-stone-400 mt-4">
-          {config.dataMode === "demo" ? "Authentication uses allowlisted demo accounts. Do not enter real personal or child information." : "Sign in with an account provisioned in the local SQLite database."}
         </p>
       </div>
     </div>
