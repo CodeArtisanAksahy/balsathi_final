@@ -27,7 +27,6 @@ export async function POST(request: Request): Promise<Response> {
   try {
     assertSameOrigin(request);
     const session = await getActorFromSession();
-    if (config.dataMode === "sqlite") throw new ApiError(501, "UPLOAD_NOT_CONFIGURED", "Database-backed attachment records are not configured for SQLite mode.");
     requirePermission(session.role, "observations:create");
     const contentLength = Number(request.headers.get("content-length"));
     if (Number.isFinite(contentLength) && contentLength > MAX_UPLOAD_BYTES + 64 * 1024) {
@@ -52,20 +51,74 @@ export async function POST(request: Request): Promise<Response> {
       throw new ApiError(415, "FILE_KIND_MISMATCH", "The selected file does not match its attachment type.");
     }
 
-    const data = getDemoStore();
-    const child = data.children.find((c) => c.id === childId);
-    if (!child) {
-      throw new ApiError(404, "CHILD_NOT_FOUND", "Child not found.");
+    let centerIdForAudit: string | null = null;
+    if (config.dataMode === "sqlite") {
+      const { requireDatabaseChildAccess } = await import("@/lib/authorization");
+      const child = await requireDatabaseChildAccess(session, childId);
+      centerIdForAudit = child.centerId;
+    } else {
+      const data = getDemoStore();
+      const child = data.children.find((c) => c.id === childId);
+      if (!child) throw new ApiError(404, "CHILD_NOT_FOUND", "Child not found.");
+      assertChildAccess(session, child.id);
+      centerIdForAudit = child.centerId;
     }
-    assertChildAccess(session, child.id);
 
     const storageKey = `uploads/${childId}/${randomUUID()}${safeExtensionByMime[file.type]}`;
     const buffer = Buffer.from(await file.arrayBuffer());
     const { url } = await uploadFile(storageKey, buffer, file.type || "application/octet-stream");
 
     const now = new Date().toISOString();
-    const attachment: AttachmentRecord = {
-      id: newId("attachment"),
+    const attachmentId = config.dataMode === "sqlite" ? randomUUID() : newId("attachment");
+    if (config.dataMode === "sqlite") {
+      const { prisma } = await import("@/lib/prisma");
+      await prisma.attachmentRecord.create({
+        data: {
+          id: attachmentId,
+          observationId: null,
+          childId,
+          kind: kind as AttachmentKind,
+          fileName: file.name,
+          storageKey,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          uploadedById: session.id,
+          consentVerified,
+        },
+      });
+      const { prisma: prisma2 } = await import("@/lib/prisma");
+      await prisma2.auditLog.create({
+        data: { actorId: session.id, action: "attachment.uploaded", entityType: "Attachment", entityId: attachmentId, scopeCenterId: centerIdForAudit, metadata: { childId, kind } },
+      });
+    } else {
+      const data = getDemoStore();
+      const attachment: AttachmentRecord = {
+        id: attachmentId,
+        observationId: null,
+        childId,
+        kind: kind as AttachmentKind,
+        fileName: file.name,
+        storageKey,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        uploadedById: session.id,
+        consentVerified,
+        createdAt: now,
+        updatedAt: now,
+      };
+      data.attachments.push(attachment);
+      appendAudit(data, {
+        actorId: session.id,
+        action: "attachment.uploaded",
+        entityType: "Attachment",
+        entityId: attachment.id,
+        scopeCenterId: centerIdForAudit,
+        metadata: { childId, kind },
+      });
+    }
+
+    const attachment = {
+      id: attachmentId,
       observationId: null,
       childId,
       kind: kind as AttachmentKind,
@@ -78,16 +131,6 @@ export async function POST(request: Request): Promise<Response> {
       createdAt: now,
       updatedAt: now,
     };
-    data.attachments.push(attachment);
-    appendAudit(data, {
-      actorId: session.id,
-      action: "attachment.uploaded",
-      entityType: "Attachment",
-      entityId: attachment.id,
-      scopeCenterId: child.centerId,
-      metadata: { childId, kind },
-    });
-
     return jsonResponse({ ...attachment, url }, 201);
   } catch (error) {
     return errorResponse(error);

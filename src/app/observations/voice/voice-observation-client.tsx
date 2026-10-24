@@ -58,7 +58,6 @@ function VoiceObservationInner() {
   }, [recording, paused]);
 
   async function startRecording() {
-    if (sqliteMode) { setError("Voice transcription is unavailable in SQLite mode. Enter observation notes below to save a text-based record."); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
@@ -118,13 +117,13 @@ function VoiceObservationInner() {
         body: JSON.stringify({
           childId,
           observedAt: new Date().toISOString(),
-          method: sqliteMode ? "TEXT" : "VOICE",
+          method: "VOICE",
           observationLanguage: session?.preferredLanguage ?? "en",
           domain,
           activityContext,
           observationText,
-          workerNotes: sqliteMode ? "" : transcript,
-          ...(sqliteMode ? {} : { aiTranscript: transcript, aiExtractedSummary: observationText.slice(0, 200) }),
+          workerNotes: transcript,
+          aiTranscript: transcript, aiExtractedSummary: observationText.slice(0, 200),
           followUpRequired: false,
           reviewStatus: "REVIEW_PENDING",
           milestoneAssessments: [],
@@ -157,10 +156,10 @@ function VoiceObservationInner() {
   if (reviewing) {
     return <ObservationReviewCard
       title="Voice observation"
-      method={sqliteMode ? "Text note (voice unavailable in SQLite)" : "Voice note"}
+      method="Voice note"
       childName={childName}
       observedAt={new Date()}
-      duration={sqliteMode ? undefined : `${mm}:${ss}`}
+      duration={`${mm}:${ss}`}
       about={observationText}
       details={[{ label: "Domain", value: domain }, ...(activityContext ? [{ label: "Activity", value: activityContext }] : []), ...(transcript ? [{ label: "Transcript", value: transcript }] : [])]}
       saving={saving}
@@ -175,7 +174,6 @@ function VoiceObservationInner() {
       <button type="button" onClick={() => router.push("/observations/new")} className="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-forest"><ArrowLeft className="h-4 w-4" /> Back</button>
       <header><p className="text-xs font-bold uppercase tracking-[0.15em] text-forest">Speak about the child’s activity or behaviour</p><h1 className="mt-1 text-2xl font-bold">Voice Observation</h1></header>
 
-      {sqliteMode && <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">Voice recording and transcription are unavailable in SQLite mode. You can still enter observation notes and save them as a text-based record.</div>}
 
       {error && <div className="rounded-xl bg-risk-red-light text-risk-red text-sm px-4 py-3">{error}</div>}
 
@@ -196,10 +194,10 @@ function VoiceObservationInner() {
             })}
           </div>
           <div className="text-3xl font-bold tabular-nums text-[#285c37]">{mm}:{ss}</div>
-          <p className="mt-1 text-xs text-stone-500">{recording ? (paused ? "Paused" : "Recording…") : sqliteMode ? "Voice recording unavailable" : "Ready to record"}</p>
+          <p className="mt-1 text-xs text-stone-500">{recording ? (paused ? "Paused" : "Recording…") : "Ready to record"}</p>
           <div className="mt-5 flex justify-center gap-3">
             {!recording ? (
-              <button onClick={startRecording} disabled={sqliteMode} aria-label="Start recording" className="inline-flex h-12 items-center gap-2 rounded-full bg-[#e6f0df] px-5 font-semibold text-[#285c37] disabled:cursor-not-allowed disabled:opacity-50">
+              <button onClick={startRecording}  aria-label="Start recording" className="inline-flex h-12 items-center gap-2 rounded-full bg-[#e6f0df] px-5 font-semibold text-[#285c37] disabled:cursor-not-allowed disabled:opacity-50">
                 <Mic className="w-4 h-4" /> Start
               </button>
             ) : (

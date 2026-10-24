@@ -111,16 +111,34 @@ export function getLatestObservation(state: DemoData, childId: string) {
  * Score = percentage of MET assessments out of all assessments in that domain.
  * Returns null if there are no assessments in a domain.
  */
+const STATUS_WEIGHT: Record<string, number> = {
+  MET: 100,
+  IN_PROGRESS: 60,
+  NEEDS_REVIEW: 35,
+  NOT_OBSERVED: 0,
+};
+
 export function getDomainProgress(state: DemoData, childId: string, domain: DevelopmentDomain): number | null {
-  const domainMilestoneIds = new Set(
-    state.milestoneDefinitions.filter((m) => m.domain === domain && m.active).map((m) => m.id),
-  );
-  const assessments = state.milestoneAssessments.filter(
-    (a) => a.childId === childId && domainMilestoneIds.has(a.milestoneId) && !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(a.status),
-  );
-  if (assessments.length === 0) return null;
-  const met = assessments.filter((a) => a.status === "MET").length;
-  return Math.round((met / assessments.length) * 100);
+  const child = state.children.find((c) => c.id === childId);
+  if (!child) return null;
+  const now = new Date();
+  const ageMonths = Math.max(0, (now.getUTCFullYear() - new Date(child.dateOfBirth).getUTCFullYear()) * 12 + now.getUTCMonth() - new Date(child.dateOfBirth).getUTCMonth());
+  const domainDefs = state.milestoneDefinitions.filter((m) => m.domain === domain && m.active && m.minAgeMonths <= ageMonths && m.maxAgeMonths > ageMonths);
+  if (domainDefs.length === 0) return null;
+  let weightedTotal = 0;
+  let weightSum = 0;
+  for (const def of domainDefs) {
+    const latest = state.milestoneAssessments
+      .filter((a) => a.childId === childId && a.milestoneId === def.id)
+      .sort((a, b) => b.assessedAt.localeCompare(a.assessedAt))[0];
+    if (!latest) continue;
+    if (["NOT_ASSESSED", "NOT_APPLICABLE"].includes(latest.status)) continue;
+    const weight = 1;
+    weightedTotal += (STATUS_WEIGHT[latest.status] ?? 0) * weight;
+    weightSum += 100 * weight;
+  }
+  if (weightSum === 0) return null;
+  return Math.round((weightedTotal / weightSum) * 100);
 }
 
 export function getAllDomainProgress(state: DemoData, childId: string) {

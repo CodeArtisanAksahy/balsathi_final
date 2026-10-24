@@ -377,7 +377,7 @@ export async function createDatabaseRecommendation(session: SessionUser, input: 
   requireDatabaseMode();
   const scope = await childScopeWhere(session);
   if (!await prisma.child.findFirst({ where: { id: input.childId, ...scope }, select: { id: true } })) throw new ApiError(404, "CHILD_NOT_FOUND", "Child not found.");
-  return prisma.recommendation.create({ data: { ...input, createdById: session.id, status: input.approvedForParent ? "APPROVED" : "PENDING" } });
+  return prisma.recommendation.create({ data: { ...input, createdById: session.id, status: "ACTIVE" } });
 }
 
 export async function createAggregateObservationForecast(session: SessionUser) {

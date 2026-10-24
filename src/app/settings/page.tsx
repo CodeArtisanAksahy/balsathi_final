@@ -24,6 +24,7 @@ export default function SettingsPage() {
     setError("");
     try {
       await apiFetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
+      setSession((current) => current ? { ...current, preferredLanguage: locale } : current);
       router.refresh();
     } catch (changeError) {
       setError(changeError instanceof Error ? changeError.message : "Unable to update language.");

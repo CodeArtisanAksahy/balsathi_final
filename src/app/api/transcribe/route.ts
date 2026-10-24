@@ -20,7 +20,6 @@ export async function POST(request: Request): Promise<Response> {
   try {
     assertSameOrigin(request);
     const session = await getActorFromSession();
-    if (config.dataMode === "sqlite") throw new ApiError(501, "TRANSCRIPTION_NOT_CONFIGURED", "A production transcription provider and database audit path are not configured.");
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const locale = (formData.get("locale") as string | null) ?? session.preferredLanguage;
@@ -43,17 +42,18 @@ export async function POST(request: Request): Promise<Response> {
             : "Child was observed interacting with peers during group play. Followed simple instructions and spoke two-word sentences.";
     }
 
-    // Persist a transcript record in demo store for audit.
-    const data = getDemoStore();
     const id = newId("transcript");
-    appendAudit(data, {
-      actorId: session.id,
-      action: "transcript.generated",
-      entityType: "Transcript",
-      entityId: id,
-      scopeCenterId: null,
-      metadata: { locale, provider: config.stt.provider },
-    });
+    if (config.dataMode !== "sqlite") {
+      const data = getDemoStore();
+      appendAudit(data, {
+        actorId: session.id,
+        action: "transcript.generated",
+        entityType: "Transcript",
+        entityId: id,
+        scopeCenterId: null,
+        metadata: { locale, provider: config.stt.provider },
+      });
+    }
 
     return jsonResponse({
       id,

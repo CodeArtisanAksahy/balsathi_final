@@ -58,7 +58,6 @@ function PhotoObservationInner() {
   }
 
   async function save() {
-    if (sqliteMode) { setError("Photo uploads are not available in SQLite mode. Use text observation capture instead."); return; }
     if (images.length === 0) { setError("Please add at least one photo."); return; }
     if (!observationText.trim()) { setError("Please describe the observation."); return; }
     setSaving(true);
@@ -136,7 +135,6 @@ function PhotoObservationInner() {
       <button type="button" onClick={() => router.push("/observations/new")} className="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-forest"><ArrowLeft className="h-4 w-4" /> Back</button>
       <header><p className="text-xs font-bold uppercase tracking-[0.15em] text-forest">Capture or upload a clear photo</p><h1 className="mt-1 text-2xl font-bold">Photo / Image Observation</h1></header>
 
-      {sqliteMode && <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">Photo uploads are currently unavailable in SQLite mode. Capture the observation as text instead.</div>}
 
       {error && <div className="rounded-xl bg-risk-red-light text-risk-red text-sm px-4 py-3">{error}</div>}
 
@@ -170,7 +168,7 @@ function PhotoObservationInner() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={sqliteMode}
+                
                 className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 text-stone-500 hover:border-forest hover:text-forest disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-5 w-5" />
@@ -178,16 +176,16 @@ function PhotoObservationInner() {
               </button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" disabled={sqliteMode} onChange={(e) => handleFiles(e.target.files)} />
+          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"  onChange={(e) => handleFiles(e.target.files)} />
           <button
             type="button"
             onClick={() => cameraInputRef.current?.click()}
-            disabled={sqliteMode}
+            
             className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Camera className="w-4 h-4" /> Take a photo
           </button>
-          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" disabled={sqliteMode} onChange={(e) => handleFiles(e.target.files)} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"  onChange={(e) => handleFiles(e.target.files)} />
           <p className="text-xs text-stone-500 mt-2">Guardian consent is required before a photo can be saved.</p>
         </div>
 
@@ -221,7 +219,7 @@ function PhotoObservationInner() {
             checked={consentVerified}
             onChange={(e) => setConsentVerified(e.target.checked)}
             className="accent-forest w-4 h-4 mt-0.5"
-            disabled={sqliteMode}
+            
           />
           <label className="text-sm text-stone-600">
             I confirm that guardian consent has been obtained for capturing and storing this child&apos;s photograph.
@@ -229,7 +227,7 @@ function PhotoObservationInner() {
         </div>
 
         <div className="flex justify-end">
-          <button onClick={() => { if (!childId) { setError("Select a child first."); return; } if (images.length === 0) { setError("Please add at least one photo."); return; } if (!observationText.trim()) { setError("Please describe the observation."); return; } if (!consentVerified) { setError("Confirm guardian consent before continuing."); return; } setError(""); setReviewing(true); }} disabled={sqliteMode || !consentVerified} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#24733d] px-4 font-semibold text-white hover:bg-[#1d6033] disabled:cursor-not-allowed disabled:opacity-50">
+          <button onClick={() => { if (!childId) { setError("Select a child first."); return; } if (images.length === 0) { setError("Please add at least one photo."); return; } if (!observationText.trim()) { setError("Please describe the observation."); return; } if (!consentVerified) { setError("Confirm guardian consent before continuing."); return; } setError(""); setReviewing(true); }} disabled={!consentVerified} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#24733d] px-4 font-semibold text-white hover:bg-[#1d6033] disabled:cursor-not-allowed disabled:opacity-50">
             <Save className="w-4 h-4" /> Review Photo Observation
           </button>
         </div>

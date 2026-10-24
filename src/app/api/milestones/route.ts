@@ -24,9 +24,36 @@ export async function GET(request: Request): Promise<Response> {
     const childId = new URL(request.url).searchParams.get("childId");
     if (config.dataMode === "sqlite") {
       const definitions = await prisma.milestoneDefinition.findMany({ where: { active: true }, orderBy: [{ minAgeMonths: "asc" }, { slug: "asc" }] });
-      const assessments = childId ? await prisma.milestoneAssessment.findMany({ where: { childId }, include: { milestone: true }, orderBy: { assessedAt: "desc" } }) : [];
+      const assessments = childId ? await prisma.milestoneAssessment.findMany({ where: { childId }, orderBy: { assessedAt: "desc" } }) : [];
       if (childId) await requireDatabaseChildAccess(session, childId);
-      return jsonResponse({ definitions, assessments });
+      return jsonResponse({
+        definitions: definitions.map((row) => ({
+          id: row.id,
+          slug: row.slug,
+          domain: row.domain,
+          title: { en: row.titleEn, hi: row.titleHi, mr: row.titleMr },
+          description: { en: row.descriptionEn, hi: row.descriptionHi, mr: row.descriptionMr },
+          minAgeMonths: row.minAgeMonths,
+          maxAgeMonths: row.maxAgeMonths,
+          reviewAfterMonths: row.reviewAfterMonths,
+          activities: { en: Array.isArray(row.activitiesEn) ? row.activitiesEn : [], hi: Array.isArray(row.activitiesHi) ? row.activitiesHi : [], mr: Array.isArray(row.activitiesMr) ? row.activitiesMr : [] },
+          active: row.active,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        })),
+        assessments: assessments.map((row) => ({
+          id: row.id,
+          childId: row.childId,
+          milestoneId: row.milestoneId,
+          observationId: row.observationId,
+          assessedById: row.assessedById,
+          assessedAt: row.assessedAt.toISOString(),
+          status: row.status,
+          notes: row.notes,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        })),
+      });
     }
     if (childId) {
       const assessments = getChildMilestoneAssessments(session, childId);
@@ -43,7 +70,21 @@ export async function POST(request: Request): Promise<Response> {
     const session = await getActorFromSession();
     requirePermission(session.role, "milestones:create");
     const input = milestoneAssessmentSchema.parse(await readJson(request));
-    if (config.dataMode === "sqlite") return jsonResponse(await createDatabaseMilestoneAssessment(session, input.childId, input), 201);
+    if (config.dataMode === "sqlite") {
+      const saved = await createDatabaseMilestoneAssessment(session, input.childId, input);
+      return jsonResponse({
+        id: saved.id,
+        childId: saved.childId,
+        milestoneId: saved.milestoneId,
+        observationId: saved.observationId,
+        assessedById: saved.assessedById,
+        assessedAt: saved.assessedAt instanceof Date ? saved.assessedAt.toISOString() : saved.assessedAt,
+        status: saved.status,
+        notes: saved.notes,
+        createdAt: saved.createdAt instanceof Date ? saved.createdAt.toISOString() : saved.createdAt,
+        updatedAt: saved.updatedAt instanceof Date ? saved.updatedAt.toISOString() : saved.updatedAt,
+      }, 201);
+    }
     const assessment = addMilestoneAssessment(session, input);
     return jsonResponse(assessment, 201);
   } catch (error) {

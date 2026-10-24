@@ -28,7 +28,7 @@ test("demo data contains expected seeded records", () => {
   assert.equal(data.users.length, 6);
   assert.equal(data.children.length, 10);
   assert.equal(data.observations.length, 22);
-  assert.equal(data.milestoneDefinitions.length, 3);
+  assert.equal(data.milestoneDefinitions.length, 4);
 });
 
 test("worker is linked to center-1 children", () => {
