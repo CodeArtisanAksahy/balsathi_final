@@ -53,6 +53,7 @@ export function MLModelReadiness({ session }: { session: SessionUser }) {
       <div className="min-w-0 flex-1">
         <h2 id="ml-readiness-heading" className="font-semibold text-stone-800">Notebook model integration</h2>
         <p className="mt-1 text-xs leading-5 text-stone-500">The supplied NGO, parent, and child classifiers were trained on synthetic demonstration data. These results are experimental and are not validated for real-world decisions.</p>
+        <p className="mt-1 text-xs leading-5 text-stone-500">A separate childdevdata research experiment is documented offline only; it is not deployed because Balsathi does not yet have an approved instrument mapping or local validation dataset.</p>
       </div>
     </div>
 

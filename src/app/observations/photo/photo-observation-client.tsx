@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Upload, X, Save, ArrowLeft, Plus } from "lucide-react";
-import type { SessionUser } from "@/lib/domain";
+import type { DevelopmentDomain, SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
 import { getConfiguredDataMode } from "@/lib/fetch";
 import Image from "next/image";
 import { ObservationReviewCard } from "@/components/observation-review-card";
+import { storeActions } from "@/lib/store-actions";
 
 export default function PhotoObservationPage() {
   return <PhotoObservationInner />;
@@ -76,23 +77,22 @@ function PhotoObservationInner() {
         });
         if ((uploaded as any).id) attachmentIds.push((uploaded as any).id);
       }
-      await apiFetch("/api/observations", {
-        method: "POST",
-        body: JSON.stringify({
+      const payload = {
           childId,
           observedAt: new Date().toISOString(),
-          method: "PHOTO",
+          method: "PHOTO" as const,
           observationLanguage: session?.preferredLanguage ?? "en",
-          domain,
+          domain: domain as DevelopmentDomain,
           activityContext,
           observationText,
           workerNotes: note,
           followUpRequired: false,
-          reviewStatus: "REVIEW_PENDING",
+          reviewStatus: "REVIEW_PENDING" as const,
           attachmentIds,
           milestoneAssessments: [],
-        }),
-      });
+        };
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/observations", { method: "POST", body: JSON.stringify(payload) });
+      else if (session) storeActions.addObservation(session, payload);
       router.push(`/children/${childId}`);
       router.refresh();
     } catch (e: any) {

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "purpose": "Validated source contract for a future approved developmental assessment integration; no child-level ML prediction is enabled.",
+  "privacy": {"prohibited_features": ["full_name", "phone", "address", "email", "center_id", "worker_id"]},
+  "inputs": [
+    {"name": "assessment_date", "type": "datetime", "required": true, "source": "Balsathi assessment", "missing_handling": "reject"},
+    {"name": "age_days", "type": "integer", "required": true, "minimum": 0, "maximum": 2191, "source": "derived from date of birth and assessment date", "missing_handling": "reject"},
+    {"name": "instrument_id", "type": "string", "required": true, "permitted_values": [], "source": "approved assessment protocol", "missing_handling": "reject", "note": "No Balsathi instrument mapping is approved yet."},
+    {"name": "milestone_responses", "type": "object", "required": true, "source": "worker-linked milestone assessment", "permitted_values": ["MET", "IN_PROGRESS", "NEEDS_REVIEW", "NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"], "missing_handling": "preserve; do not coerce to negative"}
+  ],
+  "outputs": {"enabled": false, "reason": "No approved GSED/instrument mapping or validated target/generalisation evaluation for Balsathi's intended population."}
+}

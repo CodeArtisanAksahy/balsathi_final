@@ -11,6 +11,9 @@ import type { SessionUser, Child, RiskAssessment, Observation, MilestoneAssessme
 import { domainLabel, getMessages } from "@/lib/i18n";
 import { formatDate, formatDateTime, cn, ageLabel } from "@/lib/utils";
 import { developmentDomains } from "@/lib/domain";
+import { useStoreSelector } from "@/hooks/use-store";
+import { getAuthorizedChildren } from "@/lib/selectors";
+import { interpretObservationAbility } from "@/lib/child-interpretation";
 
 type RiskWithChild = RiskAssessment & { child: Child | undefined };
 
@@ -23,6 +26,16 @@ type Props = {
 
 export function AiInsightsView({ session, risks, observations, assessments }: Props) {
   const t = getMessages(session.preferredLanguage);
+  const scopedChildren = useStoreSelector((state) => getAuthorizedChildren(state, session));
+  const scopedChildIds = new Set(scopedChildren.map((child) => child.id));
+  const liveRisks = useStoreSelector((state) => state.riskAssessments.filter((risk) => scopedChildIds.has(risk.childId)).map((risk) => ({ ...risk, child: scopedChildren.find((child) => child.id === risk.childId) })));
+  const liveObservations = useStoreSelector((state) => state.observations.filter((observation) => scopedChildIds.has(observation.childId)));
+  const liveAssessments = useStoreSelector((state) => state.milestoneAssessments.filter((assessment) => scopedChildIds.has(assessment.childId)));
+  // Server props give the initial render; the authorized client snapshot replaces
+  // them as soon as it is available and whenever a record changes.
+  risks = liveRisks.length || scopedChildren.length ? liveRisks : risks;
+  observations = liveObservations.length || scopedChildren.length ? liveObservations : observations;
+  assessments = liveAssessments.length || scopedChildren.length ? liveAssessments : assessments;
   const router = useRouter();
   const [selectedRisk, setSelectedRisk] = useState<string | null>(risks[0]?.id ?? null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -30,6 +43,8 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
 
   const activeRisks = risks.filter((r) => !dismissed.has(r.id));
   const current = activeRisks.find((r) => r.id === selectedRisk) ?? activeRisks[0];
+  const photoAbility = interpretObservationAbility(observations, assessments, "PHOTO");
+  const voiceAbility = interpretObservationAbility(observations, assessments, "VOICE");
 
   // Domain indicators from observations
   const domainStats = developmentDomains.map((domain) => {
@@ -107,6 +122,11 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
           trend="From records"
         />
       </div>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-label="Photo and voice observation evidence">
+        <EvidenceCard evidence={photoAbility} label="Photo observation evidence" />
+        <EvidenceCard evidence={voiceAbility} label="Voice observation evidence" />
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Follow-up list */}
@@ -291,6 +311,10 @@ export function AiInsightsView({ session, risks, observations, assessments }: Pr
       </div>
     </div>
   );
+}
+
+function EvidenceCard({ evidence, label }: { evidence: ReturnType<typeof interpretObservationAbility>; label: string }) {
+  return <article className="card p-4"><h3 className="font-semibold text-stone-800">{label}</h3><p className="mt-1 text-sm text-stone-600">{evidence.observationCount} saved {evidence.method.toLowerCase()} observation{evidence.observationCount === 1 ? "" : "s"} · {evidence.assessedMilestones} linked assessments</p><p className="mt-3 text-2xl font-bold text-stone-800">{evidence.achievementPercent === null ? "—" : `${evidence.achievementPercent}%`}</p><p className="mt-1 text-xs leading-5 text-stone-500">{evidence.interpretation}</p></article>;
 }
 
 function SummaryCard({

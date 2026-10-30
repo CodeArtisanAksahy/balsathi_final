@@ -22,7 +22,7 @@ export function requireDatabaseMode() {
 export function childScopeWhere(session: SessionUser): Prisma.ChildWhereInput {
   if (session.role === "DISTRICT_ADMIN") return { active: true };
   if (session.role === "PARENT") return { active: true, guardianLinks: { some: { guardian: { linkedUserId: session.id } } } };
-  if (session.role === "WORKER") return { active: true, OR: [{ assignedWorkerId: session.id }, { centerId: { in: session.centerIds } }] };
+  if (session.role === "WORKER") return { active: true, assignedWorkerId: session.id };
   return { active: true, centerId: { in: session.centerIds } };
 }
 
@@ -34,7 +34,7 @@ export async function getDatabaseChildRegistrationOptions(session: SessionUser) 
     prisma.user.findMany({ where: { active: true, role: "WORKER" }, select: { id: true, name: true, centerIds: true }, orderBy: { name: "asc" } }),
   ]);
   const visibleCenterIds = new Set(centers.map((center) => center.id));
-  const workers = workerRows.flatMap((worker) => {
+  const workers = workerRows.filter((worker) => session.role !== "WORKER" || worker.id === session.id).flatMap((worker) => {
     const assignedCenterIds = Array.isArray(worker.centerIds)
       ? worker.centerIds.filter((centerId): centerId is string => typeof centerId === "string" && visibleCenterIds.has(centerId))
       : [];
@@ -107,6 +107,7 @@ export async function createDatabaseChild(session: SessionUser, input: {
   guardian: { name: string; phone: string; preferredLanguage: "en" | "hi" | "mr"; relationship: "MOTHER" | "FATHER" | "GRANDPARENT" | "SIBLING" | "OTHER" };
 }, idempotencyKey: string | null) {
   if (session.role === "PARENT") throw new ApiError(403, "FORBIDDEN", "Parents cannot register children.");
+  if (session.role === "WORKER" && input.assignedWorkerId !== session.id) throw new ApiError(403, "WORKER_ASSIGNMENT_FORBIDDEN", "Workers may register children only for themselves.");
   if (session.role !== "DISTRICT_ADMIN" && !session.centerIds.includes(input.centerId)) throw new ApiError(403, "CENTER_FORBIDDEN", "This center is outside your assigned scope.");
   const existingId = await assertIdempotency(session.id, idempotencyKey, "child.create");
   if (existingId) return prisma.child.findUniqueOrThrow({ where: { id: existingId }, include: { guardianLinks: { include: { guardian: true } } } });
@@ -238,15 +239,16 @@ export async function createDatabaseMilestoneAssessment(session: SessionUser, ch
 
 export async function databaseAnalytics(session: SessionUser, from?: Date, to?: Date) {
   const scope = childScopeWhere(session);
-  const children = await prisma.child.findMany({ where: scope, select: { id: true, dateOfBirth: true, centerId: true, gender: true } });
+  const children = await prisma.child.findMany({ where: scope, select: { id: true, dateOfBirth: true, centerId: true, gender: true, assignedWorkerId: true } });
   const ids = children.map((child) => child.id);
   const dateWhere = from || to ? { gte: from, lte: to } : undefined;
-  const [observations, assessments, growth, followUpRows, activeRiskRows] = await prisma.$transaction([
+  const [observations, assessments, growth, followUpRows, activeRiskRows, workerRows] = await prisma.$transaction([
     prisma.observation.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { observedAt: dateWhere } : {}) }, select: { observedAt: true, domain: true, followUpRequired: true } }),
     prisma.milestoneAssessment.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { assessedAt: dateWhere } : {}) }, include: { milestone: { select: { domain: true, active: true, minAgeMonths: true, maxAgeMonths: true } } } }),
     prisma.growthMeasurement.findMany({ where: { childId: { in: ids }, ...(dateWhere ? { measuredAt: dateWhere } : {}) }, orderBy: { measuredAt: "asc" }, select: { childId: true, measuredAt: true, heightCm: true, weightKg: true, verificationStatus: true } }),
     prisma.followUp.findMany({ where: { childId: { in: ids }, status: { in: ["OPEN", "IN_PROGRESS"] } }, select: { childId: true } }),
     prisma.riskAssessment.findMany({ where: { childId: { in: ids }, reviewRequired: true, ...(dateWhere ? { createdAt: dateWhere } : {}) }, select: { childId: true, level: true } }),
+    prisma.user.findMany({ where: { active: true, role: "WORKER" }, select: { id: true, name: true, centerIds: true } }),
   ]);
   const domains = ["PHYSICAL", "COGNITIVE", "LANGUAGE", "SOCIAL", "EMOTIONAL"] as const;
   const domainAssessments = domains.map((domain) => {
@@ -256,6 +258,43 @@ export async function databaseAnalytics(session: SessionUser, from?: Date, to?: 
     }));
     return { domain, ...milestoneCompletion(applicable), definition: "Achieved / assessed milestones applicable to age at assessment; NOT_OBSERVED, NOT_ASSESSED and NOT_APPLICABLE are excluded. This is not a clinical development score." };
   });
+  const validAssessments = assessments.filter((assessment) => {
+    const child = children.find((item) => item.id === assessment.childId);
+    if (!child) return false;
+    const age = ageInMonthsAt(child.dateOfBirth, assessment.assessedAt);
+    return assessment.milestone.active
+      && age >= assessment.milestone.minAgeMonths
+      && age < assessment.milestone.maxAgeMonths
+      && ["MET", "IN_PROGRESS", "NEEDS_REVIEW"].includes(assessment.status);
+  });
+  const visibleCenterIds = new Set(children.map((child) => child.centerId));
+  const visibleWorkers = workerRows.filter((worker) => {
+    if (session.role === "WORKER") return worker.id === session.id;
+    if (session.role === "PARENT") return false;
+    return Array.isArray(worker.centerIds) && worker.centerIds.some((centerId) => typeof centerId === "string" && visibleCenterIds.has(centerId));
+  });
+  const workerStats = visibleWorkers.map((worker) => {
+    const assigned = children.filter((child) => child.assignedWorkerId === worker.id);
+    const assignedIds = new Set(assigned.map((child) => child.id));
+    const assessedIds = new Set(validAssessments.filter((assessment) => assignedIds.has(assessment.childId)).map((assessment) => assessment.childId));
+    return {
+      workerId: worker.id,
+      workerName: worker.name,
+      assignedChildren: assigned.length,
+      childrenWithRecordedAssessment: assessedIds.size,
+      childrenWithoutRecordedAssessment: assigned.length - assessedIds.size,
+      assessmentRecordCount: validAssessments.filter((assessment) => assignedIds.has(assessment.childId)).length,
+      assessmentCoveragePercent: assigned.length ? Math.round(assessedIds.size / assigned.length * 100) : null,
+      definition: "Coverage is children with at least one age-eligible saved milestone assessment divided by currently assigned children. It is not a measure of child ability.",
+    };
+  });
+  const assessedChildIds = new Set(validAssessments.map((assessment) => assessment.childId));
+  const assessmentCoverage = {
+    childrenWithRecordedAssessment: assessedChildIds.size,
+    childrenWithoutRecordedAssessment: children.length - assessedChildIds.size,
+    assessmentCoveragePercent: children.length ? Math.round(assessedChildIds.size / children.length * 100) : null,
+    definition: "A child is covered when at least one saved, active, age-eligible milestone assessment is present. Missing records are excluded from achievement percentages.",
+  };
   const today = new Date();
   const ageGroups = [
     { label: "0–2 years", min: 0, max: 24 }, { label: "2–3 years", min: 24, max: 36 },
@@ -273,7 +312,7 @@ export async function databaseAnalytics(session: SessionUser, from?: Date, to?: 
   const observationsThisWeek = await prisma.observation.count({ where: { childId: { in: ids }, observedAt: observationWeekWhere } });
   return {
     childrenCount: children.length, observationCount: observations.length, observationsThisWeek, openFollowUps: followUpChildren.size,
-    domainAssessments, observationTrends: groupObservationCounts(observations), growthHistory: growth, ageGroups,
+    domainAssessments, assessmentCoverage, workerStats, observationTrends: groupObservationCounts(observations), growthHistory: growth, ageGroups,
     genderCounts: { boys: children.filter((child) => child.gender === "MALE").length, girls: children.filter((child) => child.gender === "FEMALE").length, other: children.filter((child) => child.gender !== "MALE" && child.gender !== "FEMALE").length },
     riskSummary: { high: highRiskChildren.size, needsSupport: needsSupport.size, noActiveFlag: Math.max(0, children.length - flagged.size), definition: "Counts active risk flags and open follow-ups. No active flag is not a clinical assessment." },
     domainObservationCounts, generatedAt: new Date().toISOString(), filters: { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null },

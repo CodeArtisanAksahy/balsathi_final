@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
 
 from .model_loader import ModelRegistry
 from .schemas import ChildInput, NGOInput, ParentInput, PredictionResponse
@@ -27,6 +28,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Balsathi Experimental Model Service", version="1.0.0", lifespan=lifespan)
 
+DEVELOPMENT_ASSESSMENT_POLICY = {
+    "enabled": False,
+    "supported_targets": [],
+    "reason": "No approved mapping from Balsathi milestone definitions to a validated source instrument has been configured.",
+    "input_contract": "ml/feature_schema.json",
+    "safety": "The service will not infer a developmental diagnosis, risk category, percentage, or a four-domain score from free-text, photo, or voice observations.",
+}
+
 
 @app.get("/health")
 def health():
@@ -36,6 +45,22 @@ def health():
 @app.get("/models/status")
 def models_status(request: Request):
     return request.app.state.registry.status()
+
+
+@app.get("/model/info")
+def model_info(request: Request):
+    """Expose supported contracts without claiming an unavailable child model."""
+    return {"service": "balsathi-tabular-models", "experimental_models": request.app.state.registry.status(), "development_assessment": DEVELOPMENT_ASSESSMENT_POLICY}
+
+
+@app.get("/model/metrics")
+def model_metrics():
+    return {
+        "available": False,
+        "metrics": None,
+        "reason": "No validated child-level model has been trained; returning metrics would be misleading.",
+        "development_assessment": DEVELOPMENT_ASSESSMENT_POLICY,
+    }
 
 
 def _predict(request: Request, model_id: str, payload: BaseModel, features: list[str]) -> dict:

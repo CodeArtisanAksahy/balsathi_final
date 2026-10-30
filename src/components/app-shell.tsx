@@ -48,6 +48,37 @@ export function AppShell({ session, children }: { session: SessionUser | null; c
     return () => { cancelled = true; };
   }, [session, isPublic, bootstrapAttempt]);
 
+  // The database is the source of truth for observations, assessments, reports,
+  // and AI follow-ups. Refresh the authorized snapshot after a local save, when
+  // another tab saves, and at a short visible-tab interval. This keeps each role
+  // in its own permitted scope while making dashboards and reports live.
+  useEffect(() => {
+    if (!session || isPublic) return;
+    let cancelled = false;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing || document.visibilityState !== "visible") return;
+      refreshing = true;
+      try {
+        if (await getConfiguredDataMode() !== "sqlite") return;
+        const response = await fetch("/api/bootstrap", { cache: "no-store" });
+        const payload = response.ok ? await response.json() : null;
+        if (!cancelled && payload?.data?.state) clientStore.replace(payload.data.state);
+      } finally { refreshing = false; }
+    };
+    const onUpdate = () => void refresh();
+    const onFocus = () => void refresh();
+    window.addEventListener("balsathi:records-updated", onUpdate);
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => void refresh(), 5_000);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("balsathi:records-updated", onUpdate);
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [session, isPublic]);
+
   if (isPublic) {
     return <div className="min-h-screen">{children}</div>;
   }

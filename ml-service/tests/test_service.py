@@ -116,6 +116,17 @@ def test_api_reports_health_and_unavailable_models(monkeypatch, tmp_path):
         assert "no prediction" in response.json()["detail"].lower()
 
 
+def test_model_information_is_explicit_when_child_level_predictions_are_unsupported(monkeypatch, tmp_path):
+    monkeypatch.setenv("ML_MODEL_DIR", str(tmp_path))
+    with TestClient(app) as client:
+        info = client.get("/model/info").json()
+        metrics = client.get("/model/metrics").json()
+        assert info["development_assessment"]["enabled"] is False
+        assert info["development_assessment"]["supported_targets"] == []
+        assert metrics["available"] is False
+        assert metrics["metrics"] is None
+
+
 @pytest.mark.parametrize(("path", "payload"), [
     ("/predict/parent", {"portal_logins_last_month": 4, "materials_accessed_pct": 52.0, "completed_milestone_reports": 2}),
     ("/predict/child", {"age_months": 24, "motor_milestones_pct": 40.0, "cognitive_milestones_pct": 50.0, "language_milestones_pct": 45.0, "social_milestones_pct": 60.0}),

@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, Save, Play, Pause, Square, ArrowLeft } from "lucide-react";
-import type { SessionUser } from "@/lib/domain";
+import type { DevelopmentDomain, SessionUser } from "@/lib/domain";
 import { apiFetch } from "@/lib/fetch";
 import { getConfiguredDataMode } from "@/lib/fetch";
 import Image from "next/image";
 import { ObservationReviewCard } from "@/components/observation-review-card";
+import { storeActions } from "@/lib/store-actions";
 
 export default function VoiceObservationPage() {
   return <VoiceObservationInner />;
@@ -112,23 +113,23 @@ function VoiceObservationInner() {
     setSaving(true);
     setError("");
     try {
-      await apiFetch("/api/observations", {
-        method: "POST",
-        body: JSON.stringify({
+      const payload = {
           childId,
           observedAt: new Date().toISOString(),
-          method: "VOICE",
+          method: "VOICE" as const,
           observationLanguage: session?.preferredLanguage ?? "en",
-          domain,
+          domain: domain as DevelopmentDomain,
           activityContext,
           observationText,
           workerNotes: transcript,
           aiTranscript: transcript, aiExtractedSummary: observationText.slice(0, 200),
           followUpRequired: false,
-          reviewStatus: "REVIEW_PENDING",
+          reviewStatus: "REVIEW_PENDING" as const,
           milestoneAssessments: [],
-        }),
-      });
+        attachmentIds: [],
+      };
+      if (await getConfiguredDataMode() === "sqlite") await apiFetch("/api/observations", { method: "POST", body: JSON.stringify(payload) });
+      else if (session) storeActions.addObservation(session, payload);
       router.push(`/children/${childId}`);
       router.refresh();
     } catch (e: any) {

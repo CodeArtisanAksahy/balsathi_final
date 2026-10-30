@@ -1,14 +1,13 @@
 import type { DemoData, SessionUser, Child, DevelopmentDomain } from "./domain";
 import { ageInMonths } from "./utils";
+import { ageInMonthsAt } from "./analytics-math";
 
 export function getAuthorizedChildren(state: DemoData, session: SessionUser): Child[] {
   if (session.role === "DISTRICT_ADMIN" || session.role === "CENTER_ADMIN") {
     return state.children.filter((child) => session.centerIds.includes(child.centerId));
   }
   if (session.role === "WORKER") {
-    return state.children.filter(
-      (child) => child.assignedWorkerId === session.id || session.centerIds.includes(child.centerId),
-    );
+    return state.children.filter((child) => child.assignedWorkerId === session.id);
   }
   // PARENT
   const guardianIds = state.guardians
@@ -107,38 +106,31 @@ export function getLatestObservation(state: DemoData, childId: string) {
 }
 
 /**
- * Get development domain scores (0-100) for a child based on milestone assessments.
- * Score = percentage of MET assessments out of all assessments in that domain.
- * Returns null if there are no assessments in a domain.
+ * Recorded milestone achievement, not a predicted or clinical score.
+ * The percentage is MET / (MET + IN_PROGRESS + NEEDS_REVIEW) for the latest
+ * age-eligible record of each currently applicable milestone. Missing and
+ * explicitly unassessed records are excluded rather than assigned a score.
  */
-const STATUS_WEIGHT: Record<string, number> = {
-  MET: 100,
-  IN_PROGRESS: 60,
-  NEEDS_REVIEW: 35,
-  NOT_OBSERVED: 0,
-};
 
 export function getDomainProgress(state: DemoData, childId: string, domain: DevelopmentDomain): number | null {
   const child = state.children.find((c) => c.id === childId);
   if (!child) return null;
   const now = new Date();
-  const ageMonths = Math.max(0, (now.getUTCFullYear() - new Date(child.dateOfBirth).getUTCFullYear()) * 12 + now.getUTCMonth() - new Date(child.dateOfBirth).getUTCMonth());
+  const ageMonths = ageInMonthsAt(new Date(child.dateOfBirth), now);
   const domainDefs = state.milestoneDefinitions.filter((m) => m.domain === domain && m.active && m.minAgeMonths <= ageMonths && m.maxAgeMonths > ageMonths);
   if (domainDefs.length === 0) return null;
-  let weightedTotal = 0;
-  let weightSum = 0;
+  let achieved = 0;
+  let assessed = 0;
   for (const def of domainDefs) {
     const latest = state.milestoneAssessments
       .filter((a) => a.childId === childId && a.milestoneId === def.id)
       .sort((a, b) => b.assessedAt.localeCompare(a.assessedAt))[0];
     if (!latest) continue;
-    if (["NOT_ASSESSED", "NOT_APPLICABLE"].includes(latest.status)) continue;
-    const weight = 1;
-    weightedTotal += (STATUS_WEIGHT[latest.status] ?? 0) * weight;
-    weightSum += 100 * weight;
+    if (!["MET", "IN_PROGRESS", "NEEDS_REVIEW"].includes(latest.status)) continue;
+    assessed += 1;
+    if (latest.status === "MET") achieved += 1;
   }
-  if (weightSum === 0) return null;
-  return Math.round((weightedTotal / weightSum) * 100);
+  return assessed ? Math.round(achieved / assessed * 100) : null;
 }
 
 export function getAllDomainProgress(state: DemoData, childId: string) {

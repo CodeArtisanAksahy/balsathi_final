@@ -34,11 +34,13 @@ export function ChildProfileView({ session, profile: _initialProfile }: { sessio
 
   // Radar chart data from milestone assessments per domain (derived from store)
   const radarData = useStoreSelector((state) => {
+    const progress = getAllDomainProgress(state, childId);
     return developmentDomains.map((domain) => {
-      const score = getAllDomainProgress(state, childId).find((d) => d.domain === domain)?.score ?? 0;
+      const score = progress.find((item) => item.domain === domain)?.score ?? null;
       return { domain: domainLabel(domain, session.preferredLanguage), value: score, fullMark: 100 };
     });
   });
+  const recordedRadarData = radarData.filter((item) => item.value !== null);
 
   if (!profile) return <p className="text-stone-500">Child not found.</p>;
 
@@ -100,17 +102,17 @@ export function ChildProfileView({ session, profile: _initialProfile }: { sessio
         <div className="space-y-3">
           <div className="card border-[#e9e5d9] bg-[#fffefa] p-3.5 sm:p-4">
             <h3 className="mb-1 font-semibold text-stone-800">Development Overview</h3>
-            <p className="mb-1 text-[10px] text-stone-400">Milestone progress by developmental domain</p>
-            <div className="h-64 sm:h-72">
+            <p className="mb-1 text-[10px] text-stone-400">Recorded milestone achievement by developmental domain</p>
+            {recordedRadarData.length === 0 ? <div className="flex h-64 items-center justify-center text-center text-sm text-stone-500 sm:h-72">No age-eligible milestone assessments have been recorded.</div> : <div className="h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData}>
+                <RadarChart data={recordedRadarData}>
                   <PolarGrid stroke="#e5dfeb" />
                   <PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "#645c6d" }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#aaa2ad" }} axisLine={false} />
                   <Radar name="Milestone progress" dataKey="value" stroke="#8a67ad" fill="#b59ad2" fillOpacity={0.34} strokeWidth={2} />
                 </RadarChart>
               </ResponsiveContainer>
-            </div>
+            </div>}
           </div>
 
           <div className="grid grid-cols-2 gap-2.5 min-[500px]:grid-cols-4">

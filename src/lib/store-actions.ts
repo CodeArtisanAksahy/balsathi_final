@@ -54,6 +54,7 @@ export const storeActions = {
       relationship: "MOTHER" | "FATHER" | "GRANDPARENT" | "SIBLING" | "OTHER";
     };
   }): Child {
+    if (session.role === "PARENT" || (session.role === "WORKER" && input.assignedWorkerId !== session.id)) throw new Error("FORBIDDEN");
     let created: Child | null = null;
     clientStore.setState((draft) => {
       const now = isoNow();

@@ -6,7 +6,7 @@ import { config } from "@/lib/config";
 import { forecastDashboardSchema } from "@/lib/forecast-contract";
 import { prisma } from "@/lib/prisma";
 import { enforceConfiguredRateLimit } from "@/lib/request-security";
-import { getDatabaseChildRegistrationOptions } from "@/lib/database-service";
+import { databaseAnalytics, getDatabaseChildRegistrationOptions } from "@/lib/database-service";
 
 function requireTestDatabase() {
   if (config.dataMode !== "sqlite") throw new Error("Run with DATA_MODE=sqlite.");
@@ -245,6 +245,29 @@ async function main() {
     assert.equal(assessment.status, 201, `Milestone assessment failed: ${assessment.status}`);
     const preBirthAssessment = await workerRequest(`/api/v1/children/${childId}/milestone-assessments`, { method: "POST", body: JSON.stringify({ milestoneId, status: "IN_PROGRESS", assessedAt: "2021-12-31T00:00:00.000Z" }) });
     assert.equal(preBirthAssessment.status, 422, "Pre-birth milestone assessment was accepted.");
+    const analytics = await databaseAnalytics({ id: adminId, name: "Integration Admin", email: `admin-${email}`, role: "CENTER_ADMIN", preferredLanguage: "en", centerIds: [centerId] });
+    const [directChildren, directLanguageObservations, directAssessments] = await Promise.all([
+      prisma.child.count({ where: { centerId, active: true } }),
+      prisma.observation.count({ where: { childId, domain: "LANGUAGE" } }),
+      prisma.milestoneAssessment.count({ where: { childId, milestoneId } }),
+    ]);
+    assert.equal(analytics.childrenCount, directChildren, "Analytics child count did not match the database query.");
+    assert.equal(analytics.domainObservationCounts.find((row) => row.domain === "LANGUAGE")?.count, directLanguageObservations, "Domain chart value did not match the database query.");
+    assert.equal(analytics.assessmentCoverage.childrenWithRecordedAssessment, 1, "Assessment coverage did not include the saved child assessment.");
+    assert.equal(analytics.assessmentCoverage.assessmentCoveragePercent, 50, "Assessment coverage percentage was not calculated from assigned children.");
+    assert.equal(analytics.workerStats.find((row) => row.workerId === workerId)?.assessmentRecordCount, directAssessments, "Worker assessment total did not match saved assessment records.");
+    assert.equal(analytics.workerStats.find((row) => row.workerId === workerId)?.assessmentCoveragePercent, 50, "Worker coverage percentage was not calculated from assigned children.");
+    assert.equal(analytics.domainAssessments.find((row) => row.domain === "LANGUAGE")?.completionPercent, 50, "A newly saved IN_PROGRESS assessment did not recalculate the recorded achievement percentage.");
+    const analyticsResponse = await adminRequest("/api/v1/analytics/dashboard");
+    assert.equal(analyticsResponse.status, 200, "Analytics dashboard endpoint failed.");
+    const analyticsPayload = (await analyticsResponse.json()).data;
+    assert.equal(analyticsPayload.childrenCount, directChildren, "Analytics API child count did not match the database query.");
+    assert.equal(analyticsPayload.domainAssessments.find((row: { domain: string }) => row.domain === "LANGUAGE")?.completionPercent, 50, "Analytics API did not expose the recalculated assessment value.");
+    const archivedChild = await adminRequest(`/api/v1/children/${registeredChildId}`, { method: "DELETE" });
+    assert.equal(archivedChild.status, 200, "Authorized child archive failed.");
+    const analyticsAfterArchive = await databaseAnalytics({ id: adminId, name: "Integration Admin", email: `admin-${email}`, role: "CENTER_ADMIN", preferredLanguage: "en", centerIds: [centerId] });
+    assert.equal(analyticsAfterArchive.childrenCount, 1, "Analytics did not recalculate after a child archive.");
+    assert.equal(await prisma.child.count({ where: { centerId, active: true } }), analyticsAfterArchive.childrenCount, "Archived-child analytics did not match the active database query.");
     const followUps = await workerRequest("/api/follow-ups");
     assert.equal(followUps.status, 200);
     const followUp = (await followUps.json()).data.find((row: { childId: string }) => row.childId === childId);
@@ -267,7 +290,7 @@ async function main() {
     const forecastError = await forecast.json();
     assert.ok(["MODEL_NOT_CONFIGURED", "MODEL_ARTIFACT_MISSING", "MODEL_EVALUATION_INVALID", "INSUFFICIENT_HISTORY"].includes(forecastError.error?.code), `Unexpected forecast failure: ${forecastError.error?.code}`);
 
-    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", persistent_rate_limit: "verified", expired_session: "rejected", durable_logout_revocation: "verified", deactivation_revocation: "verified", role_and_center_scope_refresh: "verified", disabled_account: "rejected", same_origin: "verified", center_isolation: "verified", parent_link_scope: "verified", center_and_account_provisioning: "verified", child_registration_options_scope: "verified", duplicate_account_rejected: "verified", child_registration_and_profile: "verified", observation_create_and_readback: "verified", growth_and_milestone_persistence: "verified", follow_up_tracking: "verified", report_generation_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
+    console.log(JSON.stringify({ status: "PASS", database: new URL(config.databaseUrl).pathname.slice(1), migrations: "current", sqlite_login: "verified", persistent_rate_limit: "verified", expired_session: "rejected", durable_logout_revocation: "verified", deactivation_revocation: "verified", role_and_center_scope_refresh: "verified", disabled_account: "rejected", same_origin: "verified", center_isolation: "verified", parent_link_scope: "verified", center_and_account_provisioning: "verified", child_registration_options_scope: "verified", duplicate_account_rejected: "verified", child_registration_and_profile: "verified", observation_create_and_readback: "verified", growth_and_milestone_persistence: "verified", dashboard_analytics_database_match: "verified", new_assessment_recalculation: "verified", archived_child_recalculation: "verified", worker_coverage_calculation: "verified", follow_up_tracking: "verified", report_generation_and_readback: "verified", idempotent_retry: "verified", stale_update_conflict: "verified", invalid_input: "rejected", readiness: "ready", forecast_rejection: forecastError.error.code, temporary_records_cleaned: "after assertions" }));
   } finally {
     await prisma.$transaction(async (tx) => {
       const createdUserIds = (await tx.user.findMany({ where: { email: { contains: suffix } }, select: { id: true } })).map((user) => user.id);

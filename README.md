@@ -57,6 +57,14 @@ Compose mounts a named volume at `/app/data` and configures `DATABASE_URL=file:/
 
 The forecast API and admin chart use aggregate monthly observation counts. They do not expose child identifiers. Generating predictions is an explicit admin action. A prediction is rejected if the model artifact/evaluation is missing, untrusted, or the database history is insufficient. No synthetic data should be presented as real predictive validation. See [PRODUCTION_DATA_ARCHITECTURE.md](PRODUCTION_DATA_ARCHITECTURE.md) for export, training, and validation details.
 
+## Development-assessment research pipeline
+
+The `ml:download-childdevdata`, `ml:profile-childdevdata`, and `ml:train-childdevdata-research` commands reproduce an offline, instrument-specific experiment using the official D-score `childdevdata` source. It is not connected to child, parent, or worker views: Balsathi has no approved source-instrument mapping or Indian-population validation for a child-level model. Read [ML_DEVELOPMENT_ASSESSMENT.md](ML_DEVELOPMENT_ASSESSMENT.md) before running it.
+
+## Authorized child import
+
+In SQLite mode, a district administrator can upload an approved CSV through **Admin → Child Import**. The workflow previews validation errors, duplicates, worker/center assignment distribution, and supplied assessment rows before it writes anything. See [CHILD_IMPORT.md](CHILD_IMPORT.md) for the exact schema and safeguards. No real-record CSV is included in this repository.
+
 ## Documentation
 
 | File | Contents |

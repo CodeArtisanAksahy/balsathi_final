@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, CheckCircle2, Circle, Clock3, Sparkles } from "lucide-react";
 import { useStoreSelector } from "@/hooks/use-store";
-import { getChildProfile } from "@/lib/selectors";
+import { getAllDomainProgress, getChildProfile } from "@/lib/selectors";
 import { developmentDomains } from "@/lib/domain";
 import type { SessionUser } from "@/lib/domain";
 import { domainLabel } from "@/lib/i18n";
@@ -15,17 +15,18 @@ const colors: Record<string, string> = { PHYSICAL: "#4f8a56", COGNITIVE: "#e6a32
 export function ParentProgressView({ session, profile: initialProfile }: { session: SessionUser; profile: { child: { id: string } } }) {
   const childId = initialProfile.child.id;
   const profile = useStoreSelector((state) => getChildProfile(state, childId));
+  const recordedScores = useStoreSelector((state) => getAllDomainProgress(state, childId));
   const [tab, setTab] = useState<"overview" | "domains" | "timeline">("overview");
   if (!profile) return <div className="rounded-3xl bg-white p-8 text-center text-stone-500">Child record not found.</div>;
 
   const progress = developmentDomains.map((domain) => {
     const ids = new Set(profile.milestoneDefinitions.filter((item) => item.active && item.domain === domain).map((item) => item.id));
-    const rows = profile.milestoneAssessments.filter((item) => ids.has(item.milestoneId) && !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(item.status));
+    const rows = profile.milestoneAssessments.filter((item) => ids.has(item.milestoneId) && ["MET", "IN_PROGRESS", "NEEDS_REVIEW"].includes(item.status));
     const met = rows.filter((item) => item.status === "MET").length;
-    return { domain, count: rows.length, met, score: rows.length ? Math.round(met / rows.length * 100) : null };
+    return { domain, count: rows.length, met, score: recordedScores.find((item) => item.domain === domain)?.score ?? null };
   });
   const scored = progress.filter((item) => item.score !== null);
-  const overall = scored.length ? Math.round(scored.reduce((total, item) => total + (item.score ?? 0), 0) / scored.length) : null;
+  const overall = scored.length ? Math.round(scored.reduce((total, item) => total + item.score!, 0) / scored.length) : null;
   const timeline = profile.milestoneAssessments.map((assessment) => ({ assessment, milestone: profile.milestoneDefinitions.find((item) => item.id === assessment.milestoneId) })).filter((item) => item.milestone).sort((a, b) => b.assessment.assessedAt.localeCompare(a.assessment.assessedAt));
 
   return <main className="mx-auto max-w-2xl space-y-4 pb-6">

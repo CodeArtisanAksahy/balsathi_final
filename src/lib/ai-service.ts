@@ -18,9 +18,7 @@ function getAuthorizedChildIds(session: SessionUser): Set<string> {
     return new Set(data.childGuardians.filter((l) => guardianIds.includes(l.guardianId)).map((l) => l.childId));
   }
   return new Set(
-    data.children
-      .filter((c) => c.assignedWorkerId === session.id || session.centerIds.includes(c.centerId))
-      .map((c) => c.id),
+    data.children.filter((c) => c.assignedWorkerId === session.id).map((c) => c.id),
   );
 }
 

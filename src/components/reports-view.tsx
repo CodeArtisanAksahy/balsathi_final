@@ -6,7 +6,7 @@ import type { ReportRecord, SessionUser } from "@/lib/domain";
 import { formatDate } from "@/lib/utils";
 import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
 import { useStoreSelector } from "@/hooks/use-store";
-import { getAuthorizedChildren } from "@/lib/selectors";
+import { getAllDomainProgress, getAuthorizedChildren } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -53,22 +53,24 @@ export function ReportsView({ session }: { session: SessionUser }) {
       refreshTimer = window.setInterval(() => {
         if (document.visibilityState === "visible") void refreshReports();
       }, 5_000);
+      window.addEventListener("balsathi:records-updated", refreshReports);
     }).catch((error) => {
       if (!cancelled) setLoadError(error instanceof Error ? error.message : "Could not load reports.");
     });
-    return () => { cancelled = true; if (refreshTimer !== undefined) window.clearInterval(refreshTimer); };
+    return () => { cancelled = true; if (refreshTimer !== undefined) window.clearInterval(refreshTimer); window.removeEventListener("balsathi:records-updated", refreshReports); };
   }, [reloadVersion]);
   const reports = databaseMode ? databaseReports : storeReports;
   const selectedChild = children.find((child) => child.id === childId) ?? children[0];
   const storeObservations = useStoreSelector((state) => state.observations.filter((observation) => observation.childId === selectedChild?.id));
   const storeMilestones = useStoreSelector((state) => state.milestoneAssessments.filter((row) => row.childId === selectedChild?.id));
   const storeRisks = useStoreSelector((state) => state.riskAssessments.filter((row) => row.childId === selectedChild?.id && row.reviewRequired));
+  const recordedDomainProgress = useStoreSelector((state) => selectedChild ? getAllDomainProgress(state, selectedChild.id) : []);
   const useServerSnapshot = session.role === "PARENT" && databaseMode && parentSnapshot?.id === selectedChild?.id;
   const childObservations = useServerSnapshot ? parentSnapshot.observations : storeObservations;
   const childMilestones = useServerSnapshot ? parentSnapshot.assessments : storeMilestones;
   const childRisks = useServerSnapshot ? parentSnapshot.risks.filter((risk) => risk.reviewRequired) : storeRisks;
-  const assessed = childMilestones.filter((row) => !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(row.status));
-  const progress = assessed.length ? Math.round(assessed.filter((row) => row.status === "MET").length / assessed.length * 100) : null;
+  const availableDomainScores = recordedDomainProgress.map((item) => item.score).filter((score): score is number => score !== null);
+  const progress = availableDomainScores.length ? Math.round(availableDomainScores.reduce((total, score) => total + score, 0) / availableDomainScores.length) : null;
 
   function downloadReport(report: ReportRecord) {
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
@@ -111,7 +113,8 @@ export function ReportsView({ session }: { session: SessionUser }) {
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshChild(); }, 10_000);
     const onFocus = () => void refreshChild();
     window.addEventListener("focus", onFocus);
-    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+    window.addEventListener("balsathi:records-updated", refreshChild);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", onFocus); window.removeEventListener("balsathi:records-updated", refreshChild); };
   }, [databaseMode, selectedChild?.id, session.role]);
 
   async function generate() {

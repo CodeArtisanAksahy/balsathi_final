@@ -29,6 +29,7 @@ import {
   HeartPulse,
   Server,
   Lock,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/lib/domain";
@@ -36,37 +37,15 @@ import { getMessages } from "@/lib/i18n";
 
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
-const workerNav: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/children", label: "Children", icon: Users },
-  { href: "/children/new", label: "Add Child", icon: UserPlus },
-  { href: "/observations/new", label: "New Observation", icon: ClipboardList },
-  { href: "/growth", label: "Height & Weight", icon: TrendingUp },
-  { href: "/observations/voice", label: "Voice Observation", icon: Mic },
-  { href: "/observations/photo", label: "Photo Observation", icon: Camera },
-  { href: "/milestones", label: "Milestones", icon: Activity },
-  { href: "/worker/ai-insights", label: "AI Insights", icon: Brain },
-  { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/assistant", label: "AI Assistant", icon: Sparkles },
-  { href: "/offline", label: "Offline & Sync", icon: Cloud },
-  { href: "/settings", label: "Settings", icon: Settings },
+const workerNav = (t: ReturnType<typeof getMessages>): NavItem[] => [
+  { href: "/dashboard", label: t.dashboard, icon: LayoutDashboard }, { href: "/children", label: t.children, icon: Users }, { href: "/children/new", label: t.addChild, icon: UserPlus }, { href: "/observations/new", label: t.newObservation, icon: ClipboardList }, { href: "/growth", label: t.heightWeight, icon: TrendingUp }, { href: "/observations/voice", label: t.voiceObs, icon: Mic }, { href: "/observations/photo", label: t.photoObs, icon: Camera }, { href: "/milestones", label: t.milestones, icon: Activity }, { href: "/worker/ai-insights", label: t.aiInsightsSidebar, icon: Brain }, { href: "/reports", label: t.reports, icon: FileText }, { href: "/notifications", label: t.notifications, icon: Bell }, { href: "/messages", label: t.messages, icon: MessageSquare }, { href: "/assistant", label: t.assistant, icon: Sparkles }, { href: "/offline", label: t.offlineSync, icon: Cloud }, { href: "/settings", label: t.settings, icon: Settings },
 ];
 
-const parentNav: NavItem[] = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/children", label: "My Children", icon: Baby },
-  { href: "/milestones", label: "Milestone Journey", icon: Activity },
-  { href: "/recommendations", label: "Home Activities", icon: Heart },
-  { href: "/growth", label: "Growth", icon: TrendingUp },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/reports", label: "Reports", icon: FileText },
-  { href: "/notifications", label: "Notifications", icon: Bell },
+const parentNav = (t: ReturnType<typeof getMessages>): NavItem[] => [
+  { href: "/dashboard", label: t.home, icon: LayoutDashboard }, { href: "/children", label: t.myChildren, icon: Baby }, { href: "/milestones", label: t.milestoneJourney, icon: Activity }, { href: "/recommendations", label: t.homeActivities, icon: Heart }, { href: "/growth", label: t.growth, icon: TrendingUp }, { href: "/messages", label: t.messages, icon: MessageSquare }, { href: "/reports", label: t.reports, icon: FileText }, { href: "/notifications", label: t.notifications, icon: Bell },
   { href: "/parent/health", label: "Health & Nutrition", icon: HeartPulse },
   { href: "/help", label: "Help & Support", icon: HelpCircle },
-  { href: "/assistant", label: "AI Assistant", icon: Sparkles },
-  { href: "/parent/settings", label: "Settings", icon: Settings },
+  { href: "/assistant", label: t.assistant, icon: Sparkles }, { href: "/parent/settings", label: t.settings, icon: Settings },
 ];
 
 const adminNav: NavItem[] = [
@@ -74,6 +53,7 @@ const adminNav: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/centers", label: "Centers", icon: Building2 },
   { href: "/admin/children", label: "Children", icon: Baby },
+  { href: "/admin/import", label: "Child Import", icon: Upload },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/ai-rules", label: "AI Rules", icon: Brain },
   { href: "/admin/content", label: "Content", icon: BookOpen },
@@ -98,7 +78,8 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const t = getMessages(session.preferredLanguage);
-  const nav = session.role === "PARENT" ? parentNav : session.role === "WORKER" ? workerNav : adminNav;
+  const nav = (session.role === "PARENT" ? parentNav(t) : session.role === "WORKER" ? workerNav(t) : adminNav)
+    .filter((item) => item.href !== "/admin/import" || session.role === "DISTRICT_ADMIN");
 
   return (
     <>

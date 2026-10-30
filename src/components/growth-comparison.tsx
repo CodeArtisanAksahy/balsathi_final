@@ -11,6 +11,7 @@ import { getAuthorizedChildren, getChildGrowth } from "@/lib/selectors";
 import { storeActions } from "@/lib/store-actions";
 import { toast } from "sonner";
 import { apiFetch, getConfiguredDataMode } from "@/lib/fetch";
+import { calculateGrowthMetrics, calculateGrowthTrend } from "@/lib/child-interpretation";
 
 export function GrowthComparison({
   session,
@@ -56,10 +57,14 @@ export function GrowthComparison({
     if (!sqliteMode || !childId) return;
     let cancelled = false;
     setLoadError("");
-    apiFetch<GrowthMeasurement[]>(`/api/growth?childId=${encodeURIComponent(childId)}`)
+    const refresh = () => apiFetch<GrowthMeasurement[]>(`/api/growth?childId=${encodeURIComponent(childId)}`)
       .then((rows) => { if (!cancelled) setDatabaseGrowth(rows); })
       .catch((error) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Could not load growth measurements."); });
-    return () => { cancelled = true; };
+    void refresh();
+    const onRecordsUpdated = () => void refresh();
+    window.addEventListener("balsathi:records-updated", onRecordsUpdated);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 5_000);
+    return () => { cancelled = true; window.removeEventListener("balsathi:records-updated", onRecordsUpdated); window.clearInterval(timer); };
   }, [sqliteMode, childId]);
   const growth = sqliteMode ? databaseGrowth : demoGrowth;
   const parentNotice = session.role === "PARENT" ? (
@@ -89,11 +94,7 @@ export function GrowthComparison({
     );
   }
 
-  function bmiFor(g: GrowthMeasurement): number | null {
-    if (!g.heightCm || g.heightCm <= 0) return null;
-    const heightM = g.heightCm / 100;
-    return g.weightKg / (heightM * heightM);
-  }
+  function bmiFor(g: GrowthMeasurement): number | null { return calculateGrowthMetrics(g)?.bmi ?? null; }
 
   async function saveMeasurement(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,6 +120,7 @@ export function GrowthComparison({
   }));
 
   const last = growth[growth.length - 1];
+  const trend = calculateGrowthTrend(growth);
 
   return (
     <div className="space-y-6">
@@ -137,7 +139,7 @@ export function GrowthComparison({
 
       {/* Current measurements */}
       {last && (
-        <div className="grid grid-cols-3 gap-4">
+        <><div className="grid grid-cols-3 gap-4">
           <div className="card p-4">
             <div className="text-xs text-stone-500">Weight</div>
             <div className="text-2xl font-bold text-stone-800">{last.weightKg} kg</div>
@@ -151,9 +153,9 @@ export function GrowthComparison({
           <div className="card p-4">
             <div className="text-xs text-stone-500">BMI</div>
             <div className="text-2xl font-bold text-stone-800">{bmiFor(last)?.toFixed(1) ?? "—"}</div>
-            <div className="text-xs text-stone-400">kg/m²</div>
+            <div className="text-xs text-stone-400">kg/m² · calculated from this recorded height and weight</div>
           </div>
-        </div>
+        </div><div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-900">For children, BMI must be interpreted using an age- and sex-specific clinical growth standard. This app shows the exact calculation and recorded change only; it does not assign a health category or percentile without an approved reference dataset.{trend ? ` Since the previous record (${Math.round(trend.elapsedDays)} days): ${trend.heightChangeCm >= 0 ? "+" : ""}${trend.heightChangeCm.toFixed(1)} cm height and ${trend.weightChangeKg >= 0 ? "+" : ""}${trend.weightChangeKg.toFixed(1)} kg weight.` : " Add another dated measurement to show a record-based growth change."}{trend && trend.heightCmPer30Days !== null && trend.weightKgPer30Days !== null ? ` Robust recorded trend (Theil–Sen median slope): ${trend.heightCmPer30Days >= 0 ? "+" : ""}${trend.heightCmPer30Days.toFixed(1)} cm and ${trend.weightKgPer30Days >= 0 ? "+" : ""}${trend.weightKgPer30Days.toFixed(2)} kg per 30 days.` : " Add a third dated measurement for a robust trend estimate."}</div></>
       )}
 
       {/* Metric toggle */}

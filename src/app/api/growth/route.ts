@@ -14,8 +14,10 @@ export const dynamic = "force-dynamic";
 const growthSchema = z.object({
   childId: z.string().min(1),
   measuredAt: z.iso.datetime(),
-  heightCm: z.number().positive(),
-  weightKg: z.number().positive(),
+  // Capture limits prevent typographical outliers. They are validation bounds,
+  // not a clinical judgement or a population growth standard.
+  heightCm: z.number().min(30).max(220),
+  weightKg: z.number().min(1).max(180),
   headCircumferenceCm: z.number().positive().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });

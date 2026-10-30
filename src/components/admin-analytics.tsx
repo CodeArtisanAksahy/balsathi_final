@@ -47,6 +47,22 @@ interface AnalyticsSnapshot {
   genderCounts: { boys: number; girls: number; other: number };
   riskSummary: { high: number; needsSupport: number; noActiveFlag: number; definition: string };
   domainObservationCounts: Array<{ domain: string; count: number }>;
+  assessmentCoverage?: {
+    childrenWithRecordedAssessment: number;
+    childrenWithoutRecordedAssessment: number;
+    assessmentCoveragePercent: number | null;
+    definition: string;
+  };
+  workerStats?: Array<{
+    workerId: string;
+    workerName: string;
+    assignedChildren: number;
+    childrenWithRecordedAssessment: number;
+    childrenWithoutRecordedAssessment: number;
+    assessmentRecordCount: number;
+    assessmentCoveragePercent: number | null;
+    definition: string;
+  }>;
   generatedAt: string;
 }
 
@@ -109,9 +125,9 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
     let cancelled = false;
     void refreshForecast(() => cancelled);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refreshForecast(() => cancelled, false); }, 15_000);
-    const onObservationUpdate = () => { setForecastStale(true); void refreshForecast(() => cancelled, false); void refreshApiAnalytics(); };
-    window.addEventListener("balsathi:observations-updated", onObservationUpdate);
-    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("balsathi:observations-updated", onObservationUpdate); };
+    const onRecordsUpdated = () => { setForecastStale(true); void refreshForecast(() => cancelled, false); void refreshApiAnalytics(); };
+    window.addEventListener("balsathi:records-updated", onRecordsUpdated);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("balsathi:records-updated", onRecordsUpdated); };
   }, [isAdmin, refreshForecast, refreshApiAnalytics]);
 
   useEffect(() => {
@@ -233,6 +249,12 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
         <Stat icon={Baby} label="Girls recorded" value={genderTotals.girls} color="bg-[#f0e9fa] text-[#8256b1]" />
       </section>
 
+      {apiAnalytics?.assessmentCoverage && <section className="card p-5" aria-label="Recorded assessment coverage">
+        <div className="flex flex-wrap items-baseline justify-between gap-2"><div><h2 className="font-semibold text-stone-800">Recorded Assessment Coverage</h2><p className="mt-1 text-xs text-stone-500">{apiAnalytics.assessmentCoverage.definition}</p></div><strong className="text-xl text-stone-800">{apiAnalytics.assessmentCoverage.assessmentCoveragePercent === null ? "No assigned children" : `${apiAnalytics.assessmentCoverage.assessmentCoveragePercent}%`}</strong></div>
+        <p className="mt-3 text-sm text-stone-600">{apiAnalytics.assessmentCoverage.childrenWithRecordedAssessment} with recorded assessment · {apiAnalytics.assessmentCoverage.childrenWithoutRecordedAssessment} without a qualifying assessment</p>
+        {apiAnalytics.workerStats && <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="border-b text-xs text-stone-500"><tr><th className="pb-2 pr-3">Worker</th><th className="pb-2 pr-3">Assigned children</th><th className="pb-2 pr-3">Children assessed</th><th className="pb-2 pr-3">Assessment records</th><th className="pb-2">Coverage</th></tr></thead><tbody>{apiAnalytics.workerStats.map((worker) => <tr key={worker.workerId} className="border-b border-stone-100 text-stone-700"><td className="py-2 pr-3 font-medium">{worker.workerName}</td><td className="py-2 pr-3">{worker.assignedChildren}</td><td className="py-2 pr-3">{worker.childrenWithRecordedAssessment}</td><td className="py-2 pr-3">{worker.assessmentRecordCount}</td><td className="py-2">{worker.assessmentCoveragePercent === null ? "No assigned children" : `${worker.assessmentCoveragePercent}%`}</td></tr>)}{apiAnalytics.workerStats.length === 0 && <tr><td colSpan={5} className="py-4 text-center text-stone-500">No active workers are in this authorized scope.</td></tr>}</tbody></table></div>}
+      </section>}
+
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="card p-5"><h2 className="font-semibold text-stone-800">Risk and follow-up flags</h2><p className="mt-1 text-xs text-stone-500">{hasRemoteAnalytics ? apiAnalytics!.riskSummary.definition : "Operational flags only; absence of a flag is not a developmental assessment."}</p><div className="mt-4 space-y-4">{flagTotals.map((item) => <div key={item.label}><div className="mb-1 flex justify-between text-sm"><span className="text-stone-600">{item.label}</span><strong className="text-stone-800">{item.count}{childTotal ? ` (${Math.round(item.count / childTotal * 100)}%)` : ""}</strong></div><div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full" style={{ width: `${childTotal ? item.count / childTotal * 100 : 0}%`, backgroundColor: item.color }} /></div></div>)}</div></div>
         <div className="card p-5"><h2 className="font-semibold text-stone-800">By age group</h2><p className="mt-1 text-xs text-stone-500">Calculated from current child dates of birth.</p><div className="mt-4 space-y-3">{ageGroups.map((group) => <div key={group.label} className="grid grid-cols-[84px_1fr_44px] items-center gap-3 text-sm"><span className="text-stone-600">{group.label}</span><div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-[#4f8a56]" style={{ width: `${group.count / maxAgeCount * 100}%` }} /></div><span className="text-right font-medium text-stone-700">{group.count}</span></div>)}</div><p className="mt-3 text-[11px] text-stone-400">Other / unspecified gender: {genderTotals.other}</p></div>
@@ -269,7 +291,7 @@ export function AdminAnalytics({ session }: { session: SessionUser }) {
         <div className="card p-5">
           <h3 className="font-semibold text-stone-800 mb-1">Risk Distribution</h3>
           <p className="text-xs text-stone-400 mb-4">Source: follow-up risk records • Values update when records change.</p>
-          {filteredRisks.length === 0 ? <div className="h-64 flex items-center justify-center text-stone-400">No risk assessment data available for this period.</div> :
+          {childTotal === 0 ? <div className="h-64 flex items-center justify-center text-stone-400">No children are in this authorized scope.</div> :
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

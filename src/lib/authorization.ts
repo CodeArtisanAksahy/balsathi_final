@@ -120,7 +120,7 @@ export async function requireDatabaseChildAccess(session: SessionUser, childId: 
       ...(session.role === "DISTRICT_ADMIN" ? {} : session.role === "PARENT"
         ? { guardianLinks: { some: { guardian: { linkedUserId: session.id } } } }
         : session.role === "WORKER"
-          ? { OR: [{ assignedWorkerId: session.id }, { centerId: { in: session.centerIds } }] }
+          ? { assignedWorkerId: session.id }
           : { centerId: { in: session.centerIds } }),
     },
   });

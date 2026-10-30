@@ -10,6 +10,7 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getAuthorizedChildren, getChildProfile } from "@/lib/selectors";
 import { domainLabel } from "@/lib/i18n";
 import { ageLabel } from "@/lib/utils";
+import { ageInMonthsAt } from "@/lib/analytics-math";
 
 const colors = ["#4f8a56", "#e6a32c", "#8b65b4", "#4398b8", "#df7770"];
 const periods = [{ label: "3 Months", months: 3 }, { label: "6 Months", months: 6 }, { label: "1 Year", months: 12 }];
@@ -26,10 +27,11 @@ export function ParentGrowthJourney({ session, selectedChildId }: { session: Ses
   const cutoff = new Date(now);
   cutoff.setMonth(cutoff.getMonth() - periodMonths);
   const scoreAt = (domain: string, date: Date) => {
-    const milestoneIds = new Set(profile.milestoneDefinitions.filter((item) => item.active && item.domain === domain).map((item) => item.id));
+    const ageMonths = ageInMonthsAt(new Date(child.dateOfBirth), date);
+    const milestoneIds = new Set(profile.milestoneDefinitions.filter((item) => item.active && item.domain === domain && item.minAgeMonths <= ageMonths && ageMonths < item.maxAgeMonths).map((item) => item.id));
     const latestByMilestone = new Map<string, (typeof profile.milestoneAssessments)[number]>();
     for (const assessment of profile.milestoneAssessments.filter((row) => milestoneIds.has(row.milestoneId) && new Date(row.assessedAt) <= date).sort((a, b) => a.assessedAt.localeCompare(b.assessedAt))) latestByMilestone.set(assessment.milestoneId, assessment);
-    const rows = [...latestByMilestone.values()].filter((row) => !["NOT_OBSERVED", "NOT_ASSESSED", "NOT_APPLICABLE"].includes(row.status));
+    const rows = [...latestByMilestone.values()].filter((row) => ["MET", "IN_PROGRESS", "NEEDS_REVIEW"].includes(row.status));
     return rows.length ? Math.round(rows.filter((row) => row.status === "MET").length / rows.length * 100) : null;
   };
   const chartData = developmentDomains.map((domain) => ({ name: domainLabel(domain, session.preferredLanguage), earlier: scoreAt(domain, cutoff), now: scoreAt(domain, now) }));

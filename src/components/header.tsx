@@ -7,12 +7,17 @@ import { useCallback, useEffect, useState } from "react";
 import type { SessionUser } from "@/lib/domain";
 import { appLocales } from "@/lib/domain";
 import { localeLabels } from "@/lib/i18n";
+import { getMessages } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/fetch";
 
 export function Header({ session, onMenuClick }: { session: SessionUser; onMenuClick: () => void }) {
   const router = useRouter();
   const [langOpen, setLangOpen] = useState(false);
+  const [locale, setLocale] = useState(session.preferredLanguage);
+  const t = getMessages(locale);
+
+  useEffect(() => setLocale(session.preferredLanguage), [session.preferredLanguage]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -22,6 +27,7 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
 
   async function switchLocale(locale: string) {
     await fetch("/api/auth/locale", { method: "POST", body: JSON.stringify({ locale }) });
+    setLocale(locale as SessionUser["preferredLanguage"]);
     setLangOpen(false);
     router.refresh();
   }
@@ -35,7 +41,7 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
           </button>
           <div className="hidden sm:block">
             <h1 className="text-lg font-semibold text-stone-800">
-              {session.role === "PARENT" ? "Parent Home" : session.role === "WORKER" ? "Worker Dashboard" : "Admin Panel"}
+              {session.role === "PARENT" ? t.parentHomeHeader : session.role === "WORKER" ? t.workerDashboardHeader : t.adminPanel}
             </h1>
           </div>
         </div>
@@ -47,7 +53,7 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-stone-600 hover:bg-stone-200 transition"
             >
               <Globe className="w-4 h-4" />
-              <span className="hidden sm:inline">{localeLabels[session.preferredLanguage]}</span>
+              <span className="hidden sm:inline">{localeLabels[locale]}</span>
             </button>
             {langOpen && (
               <div className="absolute right-0 mt-2 w-36 bg-white rounded-xl border border-stone-200 shadow-lg py-1 z-50">
@@ -57,7 +63,7 @@ export function Header({ session, onMenuClick }: { session: SessionUser; onMenuC
                     onClick={() => switchLocale(loc)}
                     className={cn(
                       "w-full text-left px-3 py-2 text-sm hover:bg-stone-100",
-                      loc === session.preferredLanguage ? "text-forest font-medium" : "text-stone-600",
+                      loc === locale ? "text-forest font-medium" : "text-stone-600",
                     )}
                   >
                     {localeLabels[loc]}

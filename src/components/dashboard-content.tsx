@@ -13,11 +13,13 @@ import { useStoreSelector } from "@/hooks/use-store";
 import { getDashboardData, getRecentObservationChildren } from "@/lib/selectors";
 import { DevelopmentJourney } from "./development-journey";
 import { ParentDashboard } from "./parent-dashboard";
+import { getMessages } from "@/lib/i18n";
 
 type DashboardData = Awaited<ReturnType<typeof import("@/lib/data").getDashboardData>>;
 
 export function DashboardContent({ session, data: _initialData }: { session: SessionUser; data?: DashboardData }) {
   const isParent = session.role === "PARENT";
+  const t = getMessages(session.preferredLanguage);
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -37,25 +39,25 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
 
   const quickActions = isParent
     ? [
-        { label: "Progress", icon: TrendingUp, href: "/children", color: "bg-[#e8f1e6] text-[#426c46]" },
-        { label: "Milestones", icon: CheckSquare, href: "/milestones", color: "bg-[#f0e9fa] text-[#8256b1]" },
-        { label: "Activities", icon: Baby, href: "/recommendations", color: "bg-[#fff0df] text-[#c8792b]" },
-        { label: "Messages", icon: ClipboardList, href: "/messages", color: "bg-[#e6f2f8] text-[#347ea6]" },
-        { label: "Reports", icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
+        { label: t.progress, icon: TrendingUp, href: "/children", color: "bg-[#e8f1e6] text-[#426c46]" },
+        { label: t.milestones, icon: CheckSquare, href: "/milestones", color: "bg-[#f0e9fa] text-[#8256b1]" },
+        { label: t.activities, icon: Baby, href: "/recommendations", color: "bg-[#fff0df] text-[#c8792b]" },
+        { label: t.messages, icon: ClipboardList, href: "/messages", color: "bg-[#e6f2f8] text-[#347ea6]" },
+        { label: t.reports, icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
       ]
     : [
-        { label: "Voice Observation", icon: Mic, href: "/observations/voice", color: "bg-[#e8f1e6] text-[#426c46]" },
-        { label: "Add Photo", icon: Camera, href: "/observations/photo", color: "bg-[#f0e9fa] text-[#8256b1]" },
-        { label: "Milestone Check", icon: CheckSquare, href: "/milestones", color: "bg-[#fff0df] text-[#c8792b]" },
-        { label: "Growth Entry", icon: TrendingUp, href: "/growth", color: "bg-[#e6f2f8] text-[#347ea6]" },
-        { label: "View Reports", icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
+        { label: t.voiceObservation, icon: Mic, href: "/observations/voice", color: "bg-[#e8f1e6] text-[#426c46]" },
+        { label: t.addPhoto, icon: Camera, href: "/observations/photo", color: "bg-[#f0e9fa] text-[#8256b1]" },
+        { label: t.milestoneCheck, icon: CheckSquare, href: "/milestones", color: "bg-[#fff0df] text-[#c8792b]" },
+        { label: t.growthEntry, icon: TrendingUp, href: "/growth", color: "bg-[#e6f2f8] text-[#347ea6]" },
+        { label: t.viewReports, icon: FileText, href: "/reports", color: "bg-[#fbe9e8] text-[#bb5b55]" },
       ];
 
   const cards = [
-    { label: isParent ? "My Children" : "Total Children", value: data.totalChildren, sub: "Registered", icon: Users, color: "bg-[#e8f1e6] text-[#426c46]", tint: "bg-[#fcfdfb]" },
-    { label: "Observations", value: data.observationsThisWeek, sub: "This week", icon: ClipboardList, color: "bg-[#f0e9fa] text-[#8256b1]", tint: "bg-[#fdfbff]" },
-    { label: isParent ? "Follow-ups" : "At Risk", value: data.followUpChildren, sub: "Needs attention", icon: AlertTriangle, color: "bg-[#fff0df] text-[#c8792b]", tint: "bg-[#fffdfa]" },
-    { label: "Offline Status", value: isOnline === null ? "Checking" : isOnline ? "Online" : "Offline", sub: "Network", icon: isOnline === false ? WifiOff : Wifi, color: isOnline === false ? "bg-[#fff0df] text-[#c8792b]" : "bg-[#e6f2f8] text-[#347ea6]", tint: "bg-[#fbfdfe]" },
+    { label: isParent ? t.myChildren : t.totalChildren, value: data.totalChildren, sub: t.registered, icon: Users, color: "bg-[#e8f1e6] text-[#426c46]", tint: "bg-[#fcfdfb]" },
+    { label: t.observations, value: data.observationsThisWeek, sub: t.thisWeek, icon: ClipboardList, color: "bg-[#f0e9fa] text-[#8256b1]", tint: "bg-[#fdfbff]" },
+    { label: isParent ? t.followUps : t.riskAttention, value: data.followUpChildren, sub: t.riskAttention, icon: AlertTriangle, color: "bg-[#fff0df] text-[#c8792b]", tint: "bg-[#fffdfa]" },
+    { label: t.offlineSync, value: isOnline === null ? t.checking : isOnline ? t.online : t.offline, sub: t.network, icon: isOnline === false ? WifiOff : Wifi, color: isOnline === false ? "bg-[#fff0df] text-[#c8792b]" : "bg-[#e6f2f8] text-[#347ea6]", tint: "bg-[#fbfdfe]" },
   ];
   const displayedChildren = isParent && data.attentionChildren.length === 0
     ? recentObservationChildren
@@ -66,8 +68,8 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
   return (
     <div className="space-y-5 pb-6">
       <header className="pt-1">
-        <h2 className="text-2xl font-bold text-stone-800">Namaste, {session.name.split(" ")[0]}! <span aria-hidden="true">👋</span></h2>
-        <p className="mt-1 text-sm text-stone-500">Every observation today shapes a better tomorrow.</p>
+        <h2 className="text-2xl font-bold text-stone-800">{t.welcome.replace("back", "")}, {session.name.split(" ")[0]}! <span aria-hidden="true">👋</span></h2>
+        <p className="mt-1 text-sm text-stone-500">{session.preferredLanguage === "hi" ? "आज का हर अवलोकन एक बेहतर कल बनाता है।" : session.preferredLanguage === "mr" ? "आजचे प्रत्येक निरीक्षण उद्याला चांगले बनवते." : "Every observation today shapes a better tomorrow."}</p>
       </header>
 
       <section aria-label="Dashboard summary" className="grid grid-cols-2 gap-2.5 min-[390px]:grid-cols-4 sm:gap-3">
@@ -90,7 +92,7 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
       <section aria-label="Development and follow-ups" className="grid grid-cols-1 gap-3 min-[390px]:grid-cols-2 sm:gap-4">
         <div className="card p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <div><h3 className="font-semibold text-stone-800">Development Overview</h3><p className="text-[10px] text-stone-400">Domain-wise</p></div>
+            <div><h3 className="font-semibold text-stone-800">{t.developmentOverview}</h3><p className="text-[10px] text-stone-400">{t.domainWise}</p></div>
           </div>
           <div className="grid grid-cols-[minmax(76px,0.7fr)_minmax(0,1.5fr)] items-center gap-3 sm:gap-5">
             <div className="flex justify-center" aria-hidden="true">
@@ -108,23 +110,23 @@ export function DashboardContent({ session, data: _initialData }: { session: Ses
 
         <div className="card p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div><h3 className="font-semibold text-stone-800">{isParent ? "Recent Updates" : "Children Needing Attention"}</h3><p className="text-[11px] text-stone-400">{isParent ? "Recent activity for your linked children" : "Children in your authorized scope"}</p></div>
-            <Link href="/children" className="shrink-0 text-xs font-medium text-forest hover:underline">View All</Link>
+            <div><h3 className="font-semibold text-stone-800">{isParent ? t.recentUpdates : t.childrenNeedingAttention}</h3><p className="text-[11px] text-stone-400">{isParent ? t.recentActivity : t.childrenInScope}</p></div>
+            <Link href="/children" className="shrink-0 text-xs font-medium text-forest hover:underline">{t.viewAll}</Link>
           </div>
           {displayedChildren.length > 0 ? <div className="divide-y divide-stone-100">
             {displayedChildren.slice(0, 4).map((item, i) => (
               <Link key={item.child?.id ?? i} href={item.child?.id ? `/children/${item.child.id}` : "/children"} className="flex items-center gap-3 py-3 transition hover:bg-stone-50">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${["bg-[#e8f1e6] text-[#426c46]", "bg-[#f0e9fa] text-[#8256b1]", "bg-[#fff0df] text-[#a86120]", "bg-[#e6f2f8] text-[#347ea6]"][i % 4]}`}>{item.child?.fullName?.slice(0, 2).toUpperCase() ?? "??"}</div>
-                <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-stone-800">{item.child?.fullName ?? "Child"}</div><div className="truncate text-xs text-stone-500">{item.child ? ageLabel(item.child.dateOfBirth) : ""}{item.risks?.length ? ` • ${item.risks[0]?.title ?? "Follow-up"}` : isParent ? " • Recent observation" : " • Follow-up review"}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-stone-800">{item.child?.fullName ?? "Child"}</div><div className="truncate text-xs text-stone-500">{item.child ? ageLabel(item.child.dateOfBirth) : ""}{item.risks?.length ? ` • ${item.risks[0]?.title ?? t.followUps}` : isParent ? ` • ${t.recentObservations}` : ` • ${t.followUps}`}</div></div>
                 {item.risks?.length > 0 && <span className={`badge shrink-0 ${item.risks[0]?.level === "HIGH" ? "bg-[#fde8e5] text-[#b64037]" : item.risks[0]?.level === "LOW" ? "bg-[#e8f1e6] text-[#426c46]" : "bg-[#fff0df] text-[#a86120]"}`}>{item.risks[0]?.level ?? "MODERATE"}</span>}
               </Link>
             ))}
-          </div> : <p className="py-8 text-center text-sm text-stone-400">{isParent ? "No recent updates yet." : "No children currently need attention."}</p>}
+          </div> : <p className="py-8 text-center text-sm text-stone-400">{isParent ? t.recentUpdates + "..." : t.noChildrenAttention}</p>}
         </div>
       </section>
 
       <section className="card p-4 sm:p-5">
-        <h3 className="mb-3 font-semibold text-stone-800">Quick Actions</h3>
+        <h3 className="mb-3 font-semibold text-stone-800">{t.quickActions}</h3>
         <div className="grid grid-cols-5 gap-1 sm:gap-3">
           {quickActions.map(({ label, icon: Icon, href, color }) => (
             <Link key={label} href={href} className="flex min-w-0 flex-col items-center gap-2 rounded-xl p-2 text-center transition hover:bg-stone-50 sm:p-3">

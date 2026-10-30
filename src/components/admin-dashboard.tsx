@@ -40,7 +40,7 @@ export function AdminDashboard({ session, databaseMode }: { session: SessionUser
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Admin dashboard data could not be loaded."); }
     finally { setLoading(false); }
   }, [databaseMode]);
-  useEffect(() => { void refresh(); const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 15_000); const onFocus = () => void refresh(); window.addEventListener("focus", onFocus); return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); }; }, [refresh]);
+  useEffect(() => { void refresh(); const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 5_000); const onFocus = () => void refresh(); const onRecordsUpdated = () => void refresh(); window.addEventListener("focus", onFocus); window.addEventListener("balsathi:records-updated", onRecordsUpdated); return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); window.removeEventListener("balsathi:records-updated", onRecordsUpdated); }; }, [refresh]);
 
   const total = data?.totalChildren ?? 0;
   const followed = data?.followUpChildren ?? 0;
@@ -72,7 +72,7 @@ export function AdminDashboard({ session, databaseMode }: { session: SessionUser
       <article className="card p-5"><div className="flex items-center justify-between"><h2 className="font-semibold text-stone-800">Centers at a glance</h2><Link href="/admin/centers" className="text-xs font-semibold text-[#386d43]">Manage centers →</Link></div><div className="mt-3 divide-y divide-stone-100">{data?.centerStats?.slice(0, 5).map((center) => <div key={center.centerName} className="flex justify-between py-2.5 text-sm"><span className="text-stone-600">{center.centerName}</span><span className="font-semibold text-stone-800">{center.totalChildren} children</span></div>)}{!loading && !data?.centerStats?.length && <p className="py-6 text-center text-sm text-stone-400">No centers in this scope.</p>}</div></article>
       <article className="card p-5"><h2 className="font-semibold text-stone-800">Quick actions</h2><div className="mt-3 grid grid-cols-2 gap-3">{[
         { label: "Add Center", href: "/admin/centers", icon: Building2 }, { label: "Add User", href: "/admin/users", icon: UserPlus }, { label: "System Reports", href: "/admin/analytics", icon: FileText }, { label: "Review Observations", href: "/admin/children", icon: ClipboardCheck },
-      ].filter(({ href }) => href !== "/admin/centers" || session.role === "DISTRICT_ADMIN").map(({ label, href, icon: Icon }) => <Link key={label} href={href} className="flex items-center gap-2 rounded-2xl bg-[#fbf7ee] p-3 text-sm font-medium text-stone-700 hover:bg-[#f5edda]"><Icon className="h-4 w-4 text-[#57734c]"/>{label}</Link>)}</div><p className="mt-3 text-[11px] text-stone-400">Figures refresh every 15 seconds and are limited to your permitted scope.</p></article>
+      ].filter(({ href }) => href !== "/admin/centers" || session.role === "DISTRICT_ADMIN").map(({ label, href, icon: Icon }) => <Link key={label} href={href} className="flex items-center gap-2 rounded-2xl bg-[#fbf7ee] p-3 text-sm font-medium text-stone-700 hover:bg-[#f5edda]"><Icon className="h-4 w-4 text-[#57734c]"/>{label}</Link>)}</div><p className="mt-3 text-[11px] text-stone-400">Figures refresh every 5 seconds and are limited to your permitted scope.</p></article>
     </section>
   </div>;
 }

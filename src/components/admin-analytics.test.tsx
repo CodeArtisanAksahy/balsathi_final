@@ -59,7 +59,7 @@ describe("admin forecast dashboard", () => {
   it("refreshes database history after an observation save without generating a forecast", async () => {
     render(<AdminAnalytics session={session} />);
     await screen.findByText(/2025-02: historical actual 12; no forecast/);
-    act(() => window.dispatchEvent(new CustomEvent("balsathi:observations-updated")));
+    act(() => window.dispatchEvent(new CustomEvent("balsathi:records-updated")));
     await waitFor(() => expect(apiFetch.mock.calls.filter(([path]) => path === "/api/v1/analytics/dashboard")).toHaveLength(2));
     expect(apiFetch.mock.calls.filter(([path]) => path === "/api/v1/analytics/forecast")).toHaveLength(2);
     expect(apiFetch).not.toHaveBeenCalledWith("/api/v1/analytics/forecast", { method: "POST" });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createDemoData } from "./demo-data";
-import { resetDemoStore } from "./demo-store";
+import { getDemoStore, resetDemoStore } from "./demo-store";
 import { assertChildAccess, getAuthorizedChildren } from "./data";
 import { getRecentObservationChildren } from "./selectors";
 import { resolveProfileChildId } from "./child-profile-utils";
@@ -61,9 +61,11 @@ test("a parent cannot retrieve an unlinked child", () => {
   assert.throws(() => assertChildAccess(parent, "child-2"), /NOT_FOUND/);
 });
 
-test("a worker cannot retrieve a child outside their center scope", () => {
+test("a worker cannot retrieve a child assigned to another worker in their center", () => {
   const worker = sessionFor("worker-1");
-  assert.throws(() => assertChildAccess(worker, "child-3"), /NOT_FOUND/);
+  const data = getDemoStore();
+  data.children.push({ ...data.children.find((child) => child.id === "child-1")!, id: "other-worker-child", internalId: "BAL-OTHER", assignedWorkerId: "worker-2" });
+  assert.throws(() => assertChildAccess(worker, "other-worker-child"), /NOT_FOUND/);
 });
 
 test("recent dashboard observations resolve their child names from state", () => {

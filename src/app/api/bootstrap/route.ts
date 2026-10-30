@@ -16,7 +16,7 @@ export async function GET() {
     if (config.dataMode !== "sqlite") return jsonResponse({ mode: "demo" });
     const where = session.role === "DISTRICT_ADMIN" ? { active: true } : session.role === "PARENT"
       ? { active: true, guardianLinks: { some: { guardian: { linkedUserId: session.id } } } }
-      : session.role === "WORKER" ? { active: true, OR: [{ assignedWorkerId: session.id }, { centerId: { in: session.centerIds } }] }
+      : session.role === "WORKER" ? { active: true, assignedWorkerId: session.id }
       : { active: true, centerId: { in: session.centerIds } };
     const children = await prisma.child.findMany({ where, include: { guardianLinks: { include: { guardian: true } } } });
     const ids = children.map((child) => child.id);

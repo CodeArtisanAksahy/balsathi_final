@@ -30,7 +30,7 @@ export function ParentDashboard({ session }: { session: SessionUser }) {
     return { domain, value: score, color: domainColors[index] };
   });
   const available = domains.filter((item) => item.value !== null);
-  const overall = available.length ? Math.round(available.reduce((sum, item) => sum + (item.value ?? 0), 0) / available.length) : null;
+  const overall = available.length ? Math.round(available.reduce((sum, item) => sum + item.value!, 0) / available.length) : null;
   const latest = profile.observations[0];
   const latestMilestone = profile.milestoneAssessments[0];
   const approvedActivities = profile.recommendations.filter((item) => item.status === "ACTIVE" && item.approvedForParent);
@@ -67,7 +67,7 @@ export function ParentDashboard({ session }: { session: SessionUser }) {
       <section className="rounded-3xl border border-[#eee8dc] bg-white p-4 shadow-sm sm:p-5">
         <div className="flex items-center justify-between"><div><h2 className="font-semibold text-stone-800">Development Overview</h2><p className="text-xs text-stone-500">Recorded milestone progress</p></div><Link href={`/growth?childId=${child.id}`} className="text-xs font-medium text-[#386d43]">View progress <ArrowRight className="inline h-3.5 w-3.5" /></Link></div>
         {overall === null ? <div className="my-8 rounded-2xl bg-[#fbfaf6] p-6 text-center text-sm text-stone-500">Progress will appear here after milestone assessments are recorded.</div> : <>
-          <div className="mx-auto h-56 max-w-sm" role="img" aria-label={`Recorded milestone achievement across ${available.length} developmental domains`}><ResponsiveContainer width="100%" height="100%"><RadarChart data={domains.map((item) => ({ name: domainLabel(item.domain, session.preferredLanguage), score: item.value ?? 0 }))} outerRadius="68%"><PolarGrid stroke="#e9e5dc" /><PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: "#57534e" }} /><Radar dataKey="score" stroke="#775ca8" fill="#b9a5d2" fillOpacity={0.42} strokeWidth={2} /></RadarChart></ResponsiveContainer></div>
+          <div className="mx-auto h-56 max-w-sm" role="img" aria-label={`Recorded milestone achievement across ${available.length} developmental domains`}><ResponsiveContainer width="100%" height="100%"><RadarChart data={available.map((item) => ({ name: domainLabel(item.domain, session.preferredLanguage), score: item.value }))} outerRadius="68%"><PolarGrid stroke="#e9e5dc" /><PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: "#57534e" }} /><Radar dataKey="score" stroke="#775ca8" fill="#b9a5d2" fillOpacity={0.42} strokeWidth={2} /></RadarChart></ResponsiveContainer></div>
           <p className="text-center text-xs text-stone-500">{overall}% of assessed milestones achieved across recorded domains</p>
           <div className="mt-3 space-y-2">{domains.map((item) => <div key={item.domain} className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="min-w-0 flex-1 text-stone-700">{domainLabel(item.domain, session.preferredLanguage)}</span>{item.value === null ? <span className="text-stone-400">No data</span> : <><div className="h-1.5 w-20 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full" style={{ width: `${item.value}%`, backgroundColor: item.color }} /></div><span className="w-9 text-right font-medium text-stone-600">{item.value}%</span></>}</div>)}</div>
         </>}

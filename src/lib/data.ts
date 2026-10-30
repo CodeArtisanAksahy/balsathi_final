@@ -72,9 +72,7 @@ export function getAuthorizedChildren(session: SessionUser): Child[] {
   }
 
   if (session.role === "WORKER") {
-    return data.children.filter(
-      (child) => child.assignedWorkerId === session.id || session.centerIds.includes(child.centerId),
-    );
+    return data.children.filter((child) => child.assignedWorkerId === session.id);
   }
 
   const guardianIds = data.guardians
